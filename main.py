@@ -91,8 +91,7 @@ def weekday():
     return datetime.now().weekday()
 
 # ===== לוגיקה =====
-def analyze():
-    return "בדיקה חדשה"
+def analyze():    
     events = get_events()
     wd = weekday()
 
@@ -169,11 +168,11 @@ def analyze():
 
 שינויים להיום:
 
-{section("🌅 שחרית", shacharit)}
+{section("🌅 1שחרית", shacharit)}
 
-{section("🌇 מנחה", mincha)}
+{section("🌇 מ2נחה", mincha)}
 
-{section("🌙 ערבית", arvit)}
+{section("🌙 3ערבית", arvit)}
 """
 
 # ===== שליחה =====
