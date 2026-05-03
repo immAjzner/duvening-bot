@@ -42,60 +42,27 @@ def get_hebrew_date():
     return f"יום {weekday}, {data['hd']} {data['hm']} {data['hy']}"
 
 def calculate_omer():
-    try:
-        print("=== DEBUG OMER START ===")
+    data = get_hebrew_data()
 
-        data = get_hebrew_data()
-        print("Raw data:", data)
-
-        if not data:
-            print("No data returned from Hebcal")
-            return None
-
-        day = data.get("hd")
-        month_raw = data.get("hm")
-
-        print("Raw day:", day)
-        print("Raw month field:", month_raw)
-
-        # בדיקות הגנה
-        if not day or not month_raw:
-            print("Missing day or month")
-            return None
-
-        day = int(day)
-
-        # חילוץ שם חודש
-        month = str(month_raw).split()[0].lower()
-        print("Parsed month:", month)
-
-        # תנאים
-        if month in ["nisan", "nissan", "ניסן"]:
-            print("Matched Nisan")
-            if day >= 16:
-                result = day - 15
-                print("Omer day:", result)
-                return result
-
-        if month in ["iyar", "iyyar", "אייר"]:
-            print("Matched Iyar")
-            result = 15 + day
-            print("Omer day:", result)
-            return result
-
-        if month in ["sivan", "סיון"]:
-            print("Matched Sivan")
-            if day <= 5:
-                result = 44 + day
-                print("Omer day:", result)
-                return result
-
-        print("No condition matched → returning None")
+    if not data:
+        print("Fallback: no hebrew data → skipping omer")
         return None
 
-    except Exception as e:
-        print("ERROR in calculate_omer:", str(e))
-        return None
+    day = int(data["hd"])
+    month = data["hm"].split()[0].lower()
+
+    if month in ["nisan", "nissan", "ניסן"]:
+        if day >= 16:
+            return day - 15
+
+    if month in ["iyar", "iyyar", "אייר"]:
+        return 15 + day
+
+    if month in ["sivan", "סיון"]:
+        if day <= 5:
+            return 44 + day
+
+    return None
 
 # ===== אירועים =====
 def get_events():
