@@ -42,22 +42,6 @@ def save_last_run(today_str, sha):
     requests.put(url, headers=headers, json=data)
 
 def should_send_now():
-    now = datetime.utcnow()
-
-    # חלון זמן של שליחה
-    if not (now.hour in [3,4] and now.minute < 5):
-        return False
-
-    today_str = date.today().isoformat()
-
-    last_run, sha = get_last_run()
-
-    if last_run and last_run.get("date") == today_str:
-        return False  # כבר שלחנו היום
-
-    # נשמור שאנחנו שולחים עכשיו
-    save_last_run(today_str, sha)
-
     return True
 
 # ===== GitHub USERS =====
