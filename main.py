@@ -5,40 +5,60 @@ from datetime import datetime
 TOKEN = os.environ["BOT_TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
 
-# ===== תאריך עברי =====
+# ===== תאריך עברי (עם הגנה) =====
 def get_hebrew_date():
-    today = datetime.now().strftime("%Y-%m-%d")
-    url = f"https://www.hebcal.com/converter?g2h=1&date={today}&json=1"
-    data = requests.get(url).json()
+    try:
+        today = datetime.now().strftime("%Y-%m-%d")
+        url = f"https://www.hebcal.com/converter?g2h=1&date={today}&json=1"
+        res = requests.get(url, timeout=10)
 
-    hebrew = f"{data['hd']} {data['hm']} {data['hy']}"
-    weekday_names = ["שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת", "ראשון"]
-    weekday = weekday_names[datetime.now().weekday()]
+        if res.status_code != 200:
+            raise Exception("Bad response")
 
-    return f"יום {weekday}, {hebrew}"
+        data = res.json()
 
-# ===== שליפת אירועים =====
+        hebrew = f"{data['hd']} {data['hm']} {data['hy']}"
+        weekday_names = ["שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת", "ראשון"]
+        weekday = weekday_names[datetime.now().weekday()]
+
+        return f"יום {weekday}, {hebrew}"
+
+    except Exception:
+        weekday_names = ["שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת", "ראשון"]
+        weekday = weekday_names[datetime.now().weekday()]
+        return f"יום {weekday}"
+
+# ===== שליפת אירועים (עם הגנה) =====
 def get_events():
-    url = "https://www.hebcal.com/hebcal"
-    params = {
-        "v": "1",
-        "cfg": "json",
-        "maj": "on",
-        "min": "on",
-        "mod": "on",
-        "nx": "on",
-        "year": "now",
-        "month": "x",
-        "ss": "off",
-        "mf": "off",
-        "c": "on",
-        "geo": "geoname",
-        "geonameid": "2925533"
-    }
+    try:
+        url = "https://www.hebcal.com/hebcal"
+        params = {
+            "v": "1",
+            "cfg": "json",
+            "maj": "on",
+            "min": "on",
+            "mod": "on",
+            "nx": "on",
+            "year": "now",
+            "month": "x",
+            "ss": "off",
+            "mf": "off",
+            "c": "on",
+            "geo": "geoname",
+            "geonameid": "2925533"
+        }
 
-    data = requests.get(url, params=params).json()
-    today = datetime.now().strftime("%Y-%m-%d")
-    return [e for e in data["items"] if e["date"].startswith(today)]
+        res = requests.get(url, params=params, timeout=10)
+
+        if res.status_code != 200:
+            return []
+
+        data = res.json()
+        today = datetime.now().strftime("%Y-%m-%d")
+        return [e for e in data["items"] if e["date"].startswith(today)]
+
+    except Exception:
+        return []
 
 def has(events, word):
     return any(word in e["title"] for e in events)
