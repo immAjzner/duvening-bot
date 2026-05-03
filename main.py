@@ -1,44 +1,32 @@
 import requests
 import os
 import json
-from datetime import datetime, date
+import base64
+from datetime import datetime, date, timedelta
 from convertdate import hebrew
 
 TOKEN = os.environ["BOT_TOKEN"]
 BASE_URL = f"https://api.telegram.org/bot{TOKEN}"
 
 GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
-REPO = os.environ["GITHUB_REPOSITORY"]  # owner/repo
+REPO = os.environ["GITHUB_REPOSITORY"]
 FILE_PATH = "users.json"
 
-# ===== GitHub helpers =====
-import base64
-
+# ===== GitHub USERS =====
 def get_users_from_github():
     url = f"https://api.github.com/repos/{REPO}/contents/{FILE_PATH}"
     headers = {"Authorization": f"Bearer {GITHUB_TOKEN}"}
-
     res = requests.get(url, headers=headers)
 
     if res.status_code != 200:
-        print("Failed to fetch users:", res.text)
         return [], None
 
     data = res.json()
-
-    try:
-        content = base64.b64decode(data["content"]).decode("utf-8")
-        users = json.loads(content)
-    except Exception as e:
-        print("Decode error:", e)
-        users = []
-
-    return users, data["sha"]
+    content = base64.b64decode(data["content"]).decode("utf-8")
+    return json.loads(content), data["sha"]
 
 
 def save_users_to_github(users, sha):
-    import base64
-
     url = f"https://api.github.com/repos/{REPO}/contents/{FILE_PATH}"
     headers = {"Authorization": f"Bearer {GITHUB_TOKEN}"}
 
@@ -51,35 +39,28 @@ def save_users_to_github(users, sha):
         "sha": sha
     }
 
-    res = requests.put(url, headers=headers, json=data)
-
-    if res.status_code not in [200, 201]:
-        print("Failed to save users:", res.text)
+    requests.put(url, headers=headers, json=data)
 
 
 def add_user(chat_id):
     users, sha = get_users_from_github()
-
     if chat_id not in users:
         users.append(chat_id)
         save_users_to_github(users, sha)
 
-
-# ===== שליחה =====
+# ===== TELEGRAM =====
 def send(chat_id, msg):
     requests.post(f"{BASE_URL}/sendMessage", data={
         "chat_id": chat_id,
         "text": msg
     })
 
-
 def broadcast(msg):
     users, _ = get_users_from_github()
-    for user in users:
-        send(user, msg)
+    for u in users:
+        send(u, msg)
 
-
-# ===== תאריך =====
+# ===== HEBREW FORMAT =====
 def hebrew_number(n):
     units = ["", "א","ב","ג","ד","ה","ו","ז","ח","ט"]
     tens = ["", "י","כ","ל","מ","נ","ס","ע","פ","צ"]
@@ -92,16 +73,13 @@ def hebrew_number(n):
     if n < 10:
         return units[n] + "׳"
 
-    if n < 100:
-        t = tens[n // 10]
-        u = units[n % 10]
-        return f"{t}״{u}" if u else f"{t}׳"
-
-    return str(n)
+    t = tens[n // 10]
+    u = units[n % 10]
+    return f"{t}״{u}" if u else f"{t}׳"
 
 
 def hebrew_year(y):
-    y = y % 1000
+    y %= 1000
     mapping = [
         (400,"ת"),(300,"ש"),(200,"ר"),(100,"ק"),
         (90,"צ"),(80,"פ"),(70,"ע"),(60,"ס"),(50,"נ"),
@@ -109,27 +87,24 @@ def hebrew_year(y):
         (9,"ט"),(8,"ח"),(7,"ז"),(6,"ו"),(5,"ה"),
         (4,"ד"),(3,"ג"),(2,"ב"),(1,"א")
     ]
-
     result = ""
-    for val, letter in mapping:
-        while y >= val:
-            result += letter
-            y -= val
-
+    for v, l in mapping:
+        while y >= v:
+            result += l
+            y -= v
     return result[:-1] + "״" + result[-1]
 
-
+# ===== DATE =====
 def get_hebrew_date():
     today = date.today()
     h_year, h_month, h_day = hebrew.from_gregorian(today.year, today.month, today.day)
 
     months = ["","ניסן","אייר","סיון","תמוז","אב","אלול","תשרי","חשוון","כסלו","טבת","שבט","אדר"]
-    weekday_names = ["שני","שלישי","רביעי","חמישי","שישי","שבת","ראשון"]
+    weekdays = ["שני","שלישי","רביעי","חמישי","שישי","שבת","ראשון"]
 
-    return f"יום {weekday_names[datetime.now().weekday()]}, {hebrew_number(h_day)} ב{months[h_month]} {hebrew_year(h_year)}"
+    return f"יום {weekdays[datetime.now().weekday()]}, {hebrew_number(h_day)} ב{months[h_month]} {hebrew_year(h_year)}"
 
-
-# ===== עומר =====
+# ===== OMER =====
 def calculate_omer():
     today = date.today()
     h_year, h_month, h_day = hebrew.from_gregorian(today.year, today.month, today.day)
@@ -143,13 +118,68 @@ def calculate_omer():
 
     return None
 
+# ===== HOLIDAYS =====
+def is_yomtov(h_month, h_day):
+    return (
+        (h_month == 1 and h_day in [15,16,21,22]) or
+        (h_month == 3 and h_day in [6,7]) or
+        (h_month == 7 and h_day in [1,2,10,15,16,22,23])
+    )
 
-# ===== הודעה =====
+def is_erev_yomtov():
+    tomorrow = date.today() + timedelta(days=1)
+    y, m, d = hebrew.from_gregorian(tomorrow.year, tomorrow.month, tomorrow.day)
+    return is_yomtov(m, d)
+
+def is_isru_chag(h_month, h_day):
+    return (
+        (h_month == 1 and h_day == 23) or
+        (h_month == 3 and h_day == 7) or
+        (h_month == 7 and h_day == 23)
+    )
+
+# ===== TACHANUN =====
+def calculate_tachanun():
+    today = date.today()
+    wd = datetime.now().weekday()
+    y, m, d = hebrew.from_gregorian(today.year, today.month, today.day)
+
+    # אין תחנון
+    if m == 1:  # ניסן
+        return "לא אומרים", "לא אומרים"
+
+    if m == 3:  # סיון
+        return "לא אומרים", "לא אומרים"
+
+    if m == 2 and d == 18:  # ל״ג בעומר
+        return "לא אומרים", "לא אומרים"
+
+    if is_yomtov(m, d) or is_isru_chag(m, d):
+        return "לא אומרים", "לא אומרים"
+
+    # ערב חג
+    if is_erev_yomtov():
+        shacharit = "רגיל" if wd not in [0,3] else "ארוך"
+        return shacharit, "לא אומרים"
+
+    # רגיל
+    if wd in [0,3]:
+        return "ארוך", "רגיל"
+
+    return "רגיל", "רגיל"
+
+# ===== MESSAGE =====
 def build_message():
     header = get_hebrew_date()
 
-    arvit = []
+    sh_tach, min_tach = calculate_tachanun()
+
     omer = calculate_omer()
+
+    shacharit = [f"תחנון: {sh_tach}"]
+    mincha = [f"תחנון: {min_tach}"] if min_tach != "רגיל" else []
+    arvit = []
+
     if omer:
         arvit.append(f"ספירת העומר: היום {omer + 1} לעומר")
 
@@ -158,48 +188,40 @@ def build_message():
 
     return f"""📅 {header}
 
-{section("🌅 שחרית", ["תחנון: רגיל"])}
+{section("🌅 שחרית", shacharit)}
 
-{section("🌇 מנחה", [])}
+{section("🌇 מנחה", mincha)}
 
 {section("🌙 ערבית", arvit)}
 """
 
-
-# ===== קבלת משתמשים =====
+# ===== UPDATES =====
 def poll_updates():
-    try:
-        users, sha = get_users_from_github()
+    res = requests.get(f"{BASE_URL}/getUpdates").json()
 
-        res = requests.get(f"{BASE_URL}/getUpdates").json()
+    users, sha = get_users_from_github()
 
-        for update in res.get("result", []):
-            if "message" not in update:
-                continue
+    for u in res.get("result", []):
+        if "message" not in u:
+            continue
 
-            chat_id = update["message"]["chat"]["id"]
-            text = update["message"].get("text", "")
+        chat_id = u["message"]["chat"]["id"]
+        text = u["message"].get("text", "")
 
-            if text == "/start":
-                if chat_id not in users:
-                    users.append(chat_id)
-                    save_users_to_github(users, sha)
-                    send(chat_id, "נרשמת בהצלחה 🙌 תקבל עדכון יומי")
+        if text == "/start":
+            if chat_id not in users:
+                users.append(chat_id)
+                save_users_to_github(users, sha)
+                send(chat_id, "נרשמת בהצלחה 🙌")
 
-        # ⚠️ חשוב: לנקות updates כדי שלא יחזרו שוב
-        if res.get("result"):
-            last_update_id = res["result"][-1]["update_id"]
-            requests.get(f"{BASE_URL}/getUpdates?offset={last_update_id + 1}")
+    if res.get("result"):
+        last = res["result"][-1]["update_id"]
+        requests.get(f"{BASE_URL}/getUpdates?offset={last+1}")
 
-    except Exception as e:
-        print("poll error:", e)
-
-
-# ===== main =====
+# ===== MAIN =====
 def main():
     poll_updates()
     broadcast(build_message())
-
 
 if __name__ == "__main__":
     main()
