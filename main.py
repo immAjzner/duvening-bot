@@ -12,6 +12,8 @@ REPO = os.environ["GITHUB_REPOSITORY"]  # owner/repo
 FILE_PATH = "users.json"
 
 # ===== GitHub helpers =====
+import base64
+
 def get_users_from_github():
     url = f"https://api.github.com/repos/{REPO}/contents/{FILE_PATH}"
     headers = {"Authorization": f"Bearer {GITHUB_TOKEN}"}
@@ -19,40 +21,40 @@ def get_users_from_github():
     res = requests.get(url, headers=headers)
 
     if res.status_code != 200:
+        print("Failed to fetch users:", res.text)
         return [], None
 
     data = res.json()
-    content = json.loads(
-        requests.utils.unquote(
-            requests.utils.unquote(
-                requests.utils.unquote(
-                    requests.utils.unquote(data["content"])
-                )
-            )
-        )
-    )
 
-    return content, data["sha"]
+    try:
+        content = base64.b64decode(data["content"]).decode("utf-8")
+        users = json.loads(content)
+    except Exception as e:
+        print("Decode error:", e)
+        users = []
+
+    return users, data["sha"]
 
 
 def save_users_to_github(users, sha):
+    import base64
+
     url = f"https://api.github.com/repos/{REPO}/contents/{FILE_PATH}"
     headers = {"Authorization": f"Bearer {GITHUB_TOKEN}"}
 
     content = json.dumps(users, ensure_ascii=False, indent=2)
+    encoded = base64.b64encode(content.encode()).decode()
 
     data = {
         "message": "update users",
-        "content": content.encode("utf-8").decode("latin1").encode("base64") if False else None
+        "content": encoded,
+        "sha": sha
     }
 
-    import base64
-    data["content"] = base64.b64encode(content.encode()).decode()
+    res = requests.put(url, headers=headers, json=data)
 
-    if sha:
-        data["sha"] = sha
-
-    requests.put(url, headers=headers, json=data)
+    if res.status_code not in [200, 201]:
+        print("Failed to save users:", res.text)
 
 
 def add_user(chat_id):
