@@ -6,7 +6,36 @@ from convertdate import hebrew
 TOKEN = os.environ["BOT_TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
 
-# ===== תאריך עברי (מקומי!) =====
+# ===== המרת מספרים לאותיות =====
+def hebrew_number(n):
+    letters = [
+        "", "א", "ב", "ג", "ד", "ה", "ו", "ז", "ח", "ט",
+        "י", "יא", "יב", "יג", "יד", "טו", "טז", "יז", "יח", "יט",
+        "כ", "כא", "כב", "כג", "כד", "כה", "כו", "כז", "כח", "כט",
+        "ל"
+    ]
+    if n <= 30:
+        return letters[n]
+    return str(n)
+
+
+def hebrew_year(y):
+    y = y % 1000
+    mapping = {
+        400: "ת", 300: "ש", 200: "ר", 100: "ק",
+        90: "צ", 80: "פ", 70: "ע", 60: "ס", 50: "נ",
+        40: "מ", 30: "ל", 20: "כ", 10: "י"
+    }
+
+    result = ""
+    for val in sorted(mapping.keys(), reverse=True):
+        while y >= val:
+            result += mapping[val]
+            y -= val
+
+    return result
+
+# ===== תאריך עברי =====
 def get_hebrew_date():
     today = date.today()
     h_year, h_month, h_day = hebrew.from_gregorian(today.year, today.month, today.day)
@@ -19,14 +48,15 @@ def get_hebrew_date():
     weekday_names = ["שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת", "ראשון"]
     weekday = weekday_names[datetime.now().weekday()]
 
-    return f"יום {weekday}, {h_day} {months[h_month]} {h_year}"
+    day_str = hebrew_number(h_day)
+    year_str = hebrew_year(h_year)
 
-# ===== עומר (מדויק 100%) =====
+    return f"יום {weekday}, {day_str} ב{months[h_month]} {year_str}"
+
+# ===== עומר =====
 def calculate_omer():
     today = date.today()
     h_year, h_month, h_day = hebrew.from_gregorian(today.year, today.month, today.day)
-
-    # ניסן = 1, אייר = 2, סיון = 3
 
     if h_month == 1 and h_day >= 16:
         return h_day - 15
@@ -130,10 +160,10 @@ def analyze():
     if pesach or yomtov:
         shacharit.append("מזמור לתודה: לא אומרים")
 
-    # ===== עומר =====
+    # ===== עומר (לערבית - יום הבא) =====
     omer_day = calculate_omer()
     if omer_day:
-        arvit.append(f"ספירת העומר: היום {omer_day} לעומר")
+        arvit.append(f"ספירת העומר: היום {omer_day + 1} לעומר")
 
     # ניקוי כפילויות
     shacharit = list(dict.fromkeys(shacharit))
