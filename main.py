@@ -139,7 +139,7 @@ def hebrew_year(y):
             y -= v
     return result[:-1] + "״" + result[-1]
 
-# ===== DATE =====
+# ===== GET HEBREW DATE ===== 
 def get_hebrew_date(for_date=None):
     if not for_date:
         for_date = date.today()
