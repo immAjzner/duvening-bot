@@ -12,6 +12,12 @@ GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
 REPO = os.environ["GITHUB_REPOSITORY"]
 FILE_PATH = "users.json"
 
+def should_send_now():
+    now = datetime.utcnow()  # חשוב: GitHub עובד ב-UTC
+
+    # 06:00 בישראל ≈ 03:00 UTC (בקיץ)
+    return now.hour in [3,4] and now.minute < 5
+
 # ===== GitHub USERS =====
 def get_users_from_github():
     url = f"https://api.github.com/repos/{REPO}/contents/{FILE_PATH}"
@@ -286,6 +292,9 @@ def poll_updates():
 # ===== MAIN =====
 def main():
     poll_updates()
+
+    if not should_send_now():
+        return
 
     if is_shabbat() or is_yomtov_today():
         return
