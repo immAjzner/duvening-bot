@@ -7,25 +7,61 @@ from convertdate import hebrew
 TOKEN = os.environ["BOT_TOKEN"]
 BASE_URL = f"https://api.telegram.org/bot{TOKEN}"
 
-USERS_FILE = "users.json"
+GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
+REPO = os.environ["GITHUB_REPOSITORY"]  # owner/repo
+FILE_PATH = "users.json"
 
-# ===== ניהול משתמשים =====
-def load_users():
-    try:
-        with open(USERS_FILE, "r") as f:
-            return json.load(f)
-    except:
-        return []
+# ===== GitHub helpers =====
+def get_users_from_github():
+    url = f"https://api.github.com/repos/{REPO}/contents/{FILE_PATH}"
+    headers = {"Authorization": f"Bearer {GITHUB_TOKEN}"}
 
-def save_users(users):
-    with open(USERS_FILE, "w") as f:
-        json.dump(users, f)
+    res = requests.get(url, headers=headers)
+
+    if res.status_code != 200:
+        return [], None
+
+    data = res.json()
+    content = json.loads(
+        requests.utils.unquote(
+            requests.utils.unquote(
+                requests.utils.unquote(
+                    requests.utils.unquote(data["content"])
+                )
+            )
+        )
+    )
+
+    return content, data["sha"]
+
+
+def save_users_to_github(users, sha):
+    url = f"https://api.github.com/repos/{REPO}/contents/{FILE_PATH}"
+    headers = {"Authorization": f"Bearer {GITHUB_TOKEN}"}
+
+    content = json.dumps(users, ensure_ascii=False, indent=2)
+
+    data = {
+        "message": "update users",
+        "content": content.encode("utf-8").decode("latin1").encode("base64") if False else None
+    }
+
+    import base64
+    data["content"] = base64.b64encode(content.encode()).decode()
+
+    if sha:
+        data["sha"] = sha
+
+    requests.put(url, headers=headers, json=data)
+
 
 def add_user(chat_id):
-    users = load_users()
+    users, sha = get_users_from_github()
+
     if chat_id not in users:
         users.append(chat_id)
-        save_users(users)
+        save_users_to_github(users, sha)
+
 
 # ===== שליחה =====
 def send(chat_id, msg):
@@ -34,12 +70,14 @@ def send(chat_id, msg):
         "text": msg
     })
 
+
 def broadcast(msg):
-    users = load_users()
+    users, _ = get_users_from_github()
     for user in users:
         send(user, msg)
 
-# ===== מספר עברי =====
+
+# ===== תאריך =====
 def hebrew_number(n):
     units = ["", "א","ב","ג","ד","ה","ו","ז","ח","ט"]
     tens = ["", "י","כ","ל","מ","נ","ס","ע","פ","צ"]
@@ -59,6 +97,7 @@ def hebrew_number(n):
 
     return str(n)
 
+
 def hebrew_year(y):
     y = y % 1000
     mapping = [
@@ -77,7 +116,7 @@ def hebrew_year(y):
 
     return result[:-1] + "״" + result[-1]
 
-# ===== תאריך =====
+
 def get_hebrew_date():
     today = date.today()
     h_year, h_month, h_day = hebrew.from_gregorian(today.year, today.month, today.day)
@@ -86,6 +125,7 @@ def get_hebrew_date():
     weekday_names = ["שני","שלישי","רביעי","חמישי","שישי","שבת","ראשון"]
 
     return f"יום {weekday_names[datetime.now().weekday()]}, {hebrew_number(h_day)} ב{months[h_month]} {hebrew_year(h_year)}"
+
 
 # ===== עומר =====
 def calculate_omer():
@@ -100,6 +140,7 @@ def calculate_omer():
         return 44 + h_day
 
     return None
+
 
 # ===== הודעה =====
 def build_message():
@@ -122,10 +163,10 @@ def build_message():
 {section("🌙 ערבית", arvit)}
 """
 
-# ===== קבלת משתמשים חדשים =====
+
+# ===== קבלת משתמשים =====
 def poll_updates():
-    url = f"{BASE_URL}/getUpdates"
-    res = requests.get(url).json()
+    res = requests.get(f"{BASE_URL}/getUpdates").json()
 
     for update in res.get("result", []):
         if "message" in update:
@@ -134,16 +175,14 @@ def poll_updates():
 
             if text == "/start":
                 add_user(chat_id)
-                send(chat_id, "נרשמת בהצלחה 🙌 תקבל עדכון יומי")
+                send(chat_id, "נרשמת בהצלחה 🙌")
+
 
 # ===== main =====
 def main():
-    # קבלת משתמשים חדשים
     poll_updates()
+    broadcast(build_message())
 
-    # שליחה יומית
-    msg = build_message()
-    broadcast(msg)
 
 if __name__ == "__main__":
     main()
