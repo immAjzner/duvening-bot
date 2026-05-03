@@ -1,8 +1,9 @@
 import requests
 from datetime import datetime
 
-TOKEN = "8725034982:AAErP7RW32kKpaMlOreJQfdi8epIk6tsyUU"
-CHAT_ID = "5474184664"
+import os
+TOKEN = os.environ["BOT_TOKEN"]
+CHAT_ID = os.environ["CHAT_ID"]
 
 def get_hebrew_calendar():
     today = datetime.now().strftime("%Y-%m-%d")
