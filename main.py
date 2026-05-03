@@ -6,34 +6,54 @@ from convertdate import hebrew
 TOKEN = os.environ["BOT_TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
 
-# ===== המרת מספרים לאותיות =====
+# ===== מספר עברי =====
 def hebrew_number(n):
-    letters = [
-        "", "א", "ב", "ג", "ד", "ה", "ו", "ז", "ח", "ט",
-        "י", "יא", "יב", "יג", "יד", "טו", "טז", "יז", "יח", "יט",
-        "כ", "כא", "כב", "כג", "כד", "כה", "כו", "כז", "כח", "כט",
-        "ל"
-    ]
-    if n <= 30:
-        return letters[n]
+    units = ["", "א","ב","ג","ד","ה","ו","ז","ח","ט"]
+    tens = ["", "י","כ","ל","מ","נ","ס","ע","פ","צ"]
+
+    if n == 15:
+        return "ט״ו"
+    if n == 16:
+        return "ט״ז"
+
+    if n < 10:
+        return units[n] + "׳"
+
+    if n < 100:
+        t = tens[n // 10]
+        u = units[n % 10]
+
+        if u:
+            return f"{t}״{u}"
+        else:
+            return f"{t}׳"
+
     return str(n)
 
 
+# ===== שנה עברית =====
 def hebrew_year(y):
     y = y % 1000
-    mapping = {
-        400: "ת", 300: "ש", 200: "ר", 100: "ק",
-        90: "צ", 80: "פ", 70: "ע", 60: "ס", 50: "נ",
-        40: "מ", 30: "ל", 20: "כ", 10: "י"
-    }
+
+    mapping = [
+        (400, "ת"), (300, "ש"), (200, "ר"), (100, "ק"),
+        (90, "צ"), (80, "פ"), (70, "ע"), (60, "ס"), (50, "נ"),
+        (40, "מ"), (30, "ל"), (20, "כ"), (10, "י"),
+        (9, "ט"), (8, "ח"), (7, "ז"), (6, "ו"), (5, "ה"),
+        (4, "ד"), (3, "ג"), (2, "ב"), (1, "א")
+    ]
 
     result = ""
-    for val in sorted(mapping.keys(), reverse=True):
+    for val, letter in mapping:
         while y >= val:
-            result += mapping[val]
+            result += letter
             y -= val
 
-    return result
+    if len(result) > 1:
+        return result[:-1] + "״" + result[-1]
+    else:
+        return result + "׳"
+
 
 # ===== תאריך עברי =====
 def get_hebrew_date():
@@ -53,6 +73,7 @@ def get_hebrew_date():
 
     return f"יום {weekday}, {day_str} ב{months[h_month]} {year_str}"
 
+
 # ===== עומר =====
 def calculate_omer():
     today = date.today()
@@ -68,6 +89,7 @@ def calculate_omer():
         return 44 + h_day
 
     return None
+
 
 # ===== אירועים =====
 def get_events():
@@ -98,11 +120,14 @@ def get_events():
     except:
         return []
 
+
 def has(events, word):
     return any(word in e["title"] for e in events)
 
+
 def weekday():
     return datetime.now().weekday()
+
 
 # ===== לוגיקה =====
 def analyze():
@@ -160,7 +185,7 @@ def analyze():
     if pesach or yomtov:
         shacharit.append("מזמור לתודה: לא אומרים")
 
-    # ===== עומר (לערבית - יום הבא) =====
+    # ===== עומר (לערבית = יום הבא) =====
     omer_day = calculate_omer()
     if omer_day:
         arvit.append(f"ספירת העומר: היום {omer_day + 1} לעומר")
@@ -189,6 +214,7 @@ def analyze():
 {section("🌙 ערבית", arvit)}
 """
 
+
 # ===== שליחה =====
 def send(msg):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
@@ -197,8 +223,10 @@ def send(msg):
         "text": msg
     })
 
+
 def main():
     send(analyze())
+
 
 if __name__ == "__main__":
     main()
