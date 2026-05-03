@@ -1,38 +1,41 @@
 import requests
 import os
 from datetime import datetime, date
+from convertdate import hebrew
 
 TOKEN = os.environ["BOT_TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
 
-# ===== תאריך עברי (רק לתצוגה, לא קריטי) =====
+# ===== תאריך עברי (מקומי!) =====
 def get_hebrew_date():
-    try:
-        today = datetime.now().strftime("%Y-%m-%d")
-        url = f"https://www.hebcal.com/converter?g2h=1&date={today}&json=1"
-        res = requests.get(url, timeout=5)
-        data = res.json()
+    today = date.today()
+    h_year, h_month, h_day = hebrew.from_gregorian(today.year, today.month, today.day)
 
-        weekday_names = ["שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת", "ראשון"]
-        weekday = weekday_names[datetime.now().weekday()]
+    months = [
+        "", "ניסן", "אייר", "סיון", "תמוז", "אב",
+        "אלול", "תשרי", "חשוון", "כסלו", "טבת", "שבט", "אדר"
+    ]
 
-        return f"יום {weekday}, {data['hd']} {data['hm']} {data['hy']}"
-    except:
-        weekday_names = ["שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת", "ראשון"]
-        weekday = weekday_names[datetime.now().weekday()]
-        return f"יום {weekday}"
+    weekday_names = ["שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת", "ראשון"]
+    weekday = weekday_names[datetime.now().weekday()]
 
-# ===== חישוב עומר (בלי API בכלל!) =====
+    return f"יום {weekday}, {h_day} {months[h_month]} {h_year}"
+
+# ===== עומר (מדויק 100%) =====
 def calculate_omer():
     today = date.today()
+    h_year, h_month, h_day = hebrew.from_gregorian(today.year, today.month, today.day)
 
-    # 🔥 תאריך קבוע: 16 ניסן 5786 = 5 באפריל 2026
-    omer_start = date(2026, 4, 5)
+    # ניסן = 1, אייר = 2, סיון = 3
 
-    delta = (today - omer_start).days + 1
+    if h_month == 1 and h_day >= 16:
+        return h_day - 15
 
-    if 1 <= delta <= 49:
-        return delta
+    if h_month == 2:
+        return 15 + h_day
+
+    if h_month == 3 and h_day <= 5:
+        return 44 + h_day
 
     return None
 
@@ -127,7 +130,7 @@ def analyze():
     if pesach or yomtov:
         shacharit.append("מזמור לתודה: לא אומרים")
 
-    # ===== עומר (עובד בטוח!) =====
+    # ===== עומר =====
     omer_day = calculate_omer()
     if omer_day:
         arvit.append(f"ספירת העומר: היום {omer_day} לעומר")
