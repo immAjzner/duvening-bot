@@ -44,8 +44,7 @@ def save_last_run(today_str, sha):
 def should_send_now():
     now = datetime.utcnow()
 
-    # חלון של ~20 דקות
-    if not (now.hour in [3,4] and now.minute < 20):
+    if now.hour != 3:
         return False
 
     today_str = date.today().isoformat()
