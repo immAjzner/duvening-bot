@@ -63,11 +63,36 @@ def get_events():
 def has(events, word):
     return any(word in e["title"] for e in events)
 
-def get_omer(events):
-    for e in events:
-        if "Omer" in e["title"]:
-            return e["title"]
-    return None
+def calculate_omer():
+    try:
+        today = datetime.now().strftime("%Y-%m-%d")
+        url = f"https://www.hebcal.com/converter?g2h=1&date={today}&json=1"
+        res = requests.get(url, timeout=10)
+
+        if res.status_code != 200:
+            return None
+
+        data = res.json()
+
+        day = int(data["hd"])
+        month = data["hm"]
+
+        # ניסן
+        if month == "Nisan" and day >= 16:
+            return day - 15
+
+        # אייר
+        if month == "Iyyar":
+            return 15 + day
+
+        # סיון
+        if month == "Sivan" and day <= 5:
+            return 44 + day
+
+        return None
+
+    except:
+        return None
 
 def weekday():
     return datetime.now().weekday()  # 0=Mon
@@ -130,9 +155,9 @@ def analyze():
         shacharit.append("מזמור לתודה: לא אומרים")
 
     # ===== ספירת העומר =====
-    omer = get_omer(events)
-    if omer:
-        arvit.append(omer)
+    omer_day = calculate_omer()
+    if omer_day:
+        arvit.append(f"ספירת העומר: היום {omer_day} לעומר")
 
     # ניקוי כפילויות
     shacharit = list(dict.fromkeys(shacharit))
