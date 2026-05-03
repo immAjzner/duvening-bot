@@ -6,24 +6,44 @@ TOKEN = os.environ["BOT_TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
 
 # ===== תאריך עברי =====
-def get_hebrew_date():
+def get_hebrew_data():
     try:
         today = datetime.now().strftime("%Y-%m-%d")
         url = f"https://www.hebcal.com/converter?g2h=1&date={today}&json=1"
         res = requests.get(url, timeout=10)
-
-        data = res.json()
-
-        hebrew = f"{data['hd']} {data['hm']} {data['hy']}"
-        weekday_names = ["שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת", "ראשון"]
-        weekday = weekday_names[datetime.now().weekday()]
-
-        return f"יום {weekday}, {hebrew}"
-
+        return res.json()
     except:
-        weekday_names = ["שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת", "ראשון"]
-        weekday = weekday_names[datetime.now().weekday()]
+        return None
+
+def get_hebrew_date():
+    data = get_hebrew_data()
+    weekday_names = ["שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת", "ראשון"]
+    weekday = weekday_names[datetime.now().weekday()]
+
+    if not data:
         return f"יום {weekday}"
+
+    return f"יום {weekday}, {data['hd']} {data['hm']} {data['hy']}"
+
+# ===== עומר (חישוב נכון!) =====
+def calculate_omer():
+    data = get_hebrew_data()
+    if not data:
+        return None
+
+    day = int(data["hd"])
+    month = data["hm"]
+
+    if month == "Nisan" and day >= 16:
+        return day - 15
+
+    if month in ["Iyyar", "Iyar"]:
+        return 15 + day
+
+    if month == "Sivan" and day <= 5:
+        return 44 + day
+
+    return None
 
 # ===== אירועים =====
 def get_events():
@@ -42,7 +62,7 @@ def get_events():
             "mf": "off",
             "c": "on",
             "geo": "geoname",
-            "geonameid": "293397"  # ישראל
+            "geonameid": "293397"
         }
 
         res = requests.get(url, params=params, timeout=10)
@@ -53,19 +73,6 @@ def get_events():
 
     except:
         return []
-
-# ===== עומר (מתוקן!) =====
-def get_omer(events):
-    for e in events:
-        title = e["title"].lower()
-
-        # תופס כל וריאציה
-        if "omer" in title:
-            digits = ''.join(filter(str.isdigit, title))
-            if digits:
-                return f"ספירת העומר: היום {digits} לעומר"
-
-    return None
 
 def has(events, word):
     return any(word in e["title"] for e in events)
@@ -129,10 +136,10 @@ def analyze():
     if pesach or yomtov:
         shacharit.append("מזמור לתודה: לא אומרים")
 
-    # ===== עומר =====
-    omer = get_omer(events)
-    if omer:
-        arvit.append(omer)
+    # ===== עומר (עכשיו עובד!) =====
+    omer_day = calculate_omer()
+    if omer_day:
+        arvit.append(f"ספירת העומר: היום {omer_day} לעומר")
 
     # ניקוי כפילויות
     shacharit = list(dict.fromkeys(shacharit))
