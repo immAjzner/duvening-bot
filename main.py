@@ -28,31 +28,29 @@ def get_hebrew_date():
 # ===== עומר (פתרון סופי!) =====
 def calculate_omer():
     try:
-        today = datetime.now().strftime("%Y-%m-%d")
+        data = get_hebrew_data()
+        print(data)
+        if not data:
+            return None
 
-        # ט"ז ניסן 2024 כבסיס (אפשר גם שנה נוכחית, זה לא משנה כי אנחנו מחשבים לפי שנה)
-        url = f"https://www.hebcal.com/converter?g2h=1&date={today}&json=1"
-        res = requests.get(url, timeout=10)
-        data = res.json()
+        day = int(data["hd"])
+        month = data["hm"].lower()
 
-        hd = int(data["hd"])
-        hm = data["hm"]
+        # נרמול שמות חודשים (עברית + אנגלית)
+        if "nisan" in month or "ניסן" in month:
+            if day >= 16:
+                return day - 15
 
-        # נזהה לפי שם חלקי בלבד
-        hm = hm.lower()
+        if "iyar" in month or "אייר" in month:
+            return 15 + day
 
-        if "nisan" in hm and hd >= 16:
-            return hd - 15
-
-        if "iyar" in hm:
-            return 15 + hd
-
-        if "sivan" in hm and hd <= 5:
-            return 44 + hd
+        if "sivan" in month or "סיון" in month:
+            if day <= 5:
+                return 44 + day
 
         return None
 
-    except:
+    except Exception:
         return None
 
 # ===== אירועים =====
