@@ -12,11 +12,53 @@ GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
 REPO = os.environ["GITHUB_REPOSITORY"]
 FILE_PATH = "users.json"
 
-def should_send_now():
-    now = datetime.utcnow()  # חשוב: GitHub עובד ב-UTC
+def get_last_run():
+    url = f"https://api.github.com/repos/{REPO}/contents/last_run.json"
+    headers = {"Authorization": f"Bearer {GITHUB_TOKEN}"}
 
-    # 06:00 בישראל ≈ 03:00 UTC (בקיץ)
-    return now.hour in [3,4] and now.minute < 5
+    res = requests.get(url, headers=headers)
+
+    if res.status_code != 200:
+        return None, None
+
+    data = res.json()
+    content = base64.b64decode(data["content"]).decode("utf-8")
+    return json.loads(content), data["sha"]
+
+
+def save_last_run(today_str, sha):
+    url = f"https://api.github.com/repos/{REPO}/contents/last_run.json"
+    headers = {"Authorization": f"Bearer {GITHUB_TOKEN}"}
+
+    content = json.dumps({"date": today_str})
+    encoded = base64.b64encode(content.encode()).decode()
+
+    data = {
+        "message": "update last run",
+        "content": encoded,
+        "sha": sha
+    }
+
+    requests.put(url, headers=headers, json=data)
+
+def should_send_now():
+    now = datetime.utcnow()
+
+    # חלון זמן של שליחה
+    if not (now.hour in [3,4] and now.minute < 5):
+        return False
+
+    today_str = date.today().isoformat()
+
+    last_run, sha = get_last_run()
+
+    if last_run and last_run.get("date") == today_str:
+        return False  # כבר שלחנו היום
+
+    # נשמור שאנחנו שולחים עכשיו
+    save_last_run(today_str, sha)
+
+    return True
 
 # ===== GitHub USERS =====
 def get_users_from_github():
