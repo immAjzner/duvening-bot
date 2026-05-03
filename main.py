@@ -4,7 +4,7 @@ from datetime import datetime
 
 TOKEN = os.environ["BOT_TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
-return "בדיקה חדשה"
+
 # ===== תאריך עברי =====
 def get_hebrew_data():
     try:
@@ -92,6 +92,7 @@ def weekday():
 
 # ===== לוגיקה =====
 def analyze():
+    return "בדיקה חדשה"
     events = get_events()
     wd = weekday()
 
