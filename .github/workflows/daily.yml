@@ -2,7 +2,7 @@ name: Daily Tefillah Update
 
 on:
   schedule:
-    - cron: '0 4 * * *'  # 06:00 ישראל (UTC+2)
+    - cron: '*/10 * * * *'  # 06:00 ישראל (UTC+2)
   workflow_dispatch:
 
 jobs:
