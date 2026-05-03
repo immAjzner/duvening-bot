@@ -5,14 +5,30 @@ from datetime import datetime
 TOKEN = os.environ["BOT_TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
 
-# ===== תאריך עברי =====
+HEBREW_CACHE = None
+
 def get_hebrew_data():
+    global HEBREW_CACHE
+
+    if HEBREW_CACHE is not None:
+        return HEBREW_CACHE
+
     try:
         today = datetime.now().strftime("%Y-%m-%d")
         url = f"https://www.hebcal.com/converter?g2h=1&date={today}&json=1"
         res = requests.get(url, timeout=10)
-        return res.json()
-    except:
+
+        print("Hebcal status:", res.status_code)
+        print("Hebcal raw:", res.text[:200])
+
+        if res.status_code != 200 or not res.text:
+            return None
+
+        HEBREW_CACHE = res.json()
+        return HEBREW_CACHE
+
+    except Exception as e:
+        print("Hebcal ERROR:", str(e))
         return None
 
 def get_hebrew_date():
