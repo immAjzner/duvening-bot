@@ -158,10 +158,10 @@ def build_message():
 
     return f"""📅 {header}
 
-שינויים להיום:
-
 {section("🌅 שחרית", ["תחנון: רגיל"])}
+
 {section("🌇 מנחה", [])}
+
 {section("🌙 ערבית", arvit)}
 """
 
