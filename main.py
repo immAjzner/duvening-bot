@@ -173,18 +173,32 @@ def build_message():
     header = get_hebrew_date()
 
     sh_tach, min_tach = calculate_tachanun()
-
     omer = calculate_omer()
 
-    shacharit = [f"תחנון: {sh_tach}"]
-    mincha = [f"תחנון: {min_tach}"] if min_tach != "רגיל" else []
-    arvit = []
+        # ===== שחרית =====
+    if sh_tach == "לא אומרים":
+        shacharit = ["אין תחנון"]
+    elif sh_tach == "ארוך":
+        shacharit = ["תחנון ארוך (והוא רחום)"]
+    else:
+        shacharit = ["אין שינויים"]
 
+    # ===== מנחה =====
+    if min_tach == "לא אומרים":
+        mincha = ["אין תחנון"]
+    else:
+        mincha = ["אין שינויים"]
+
+    # ===== ערבית =====
+    arvit = []
     if omer:
         arvit.append(f"ספירת העומר: היום {omer + 1} לעומר")
 
+    if not arvit:
+        arvit = ["אין שינויים"]
+
     def section(name, items):
-        return f"{name}:\n" + ("\n".join(items) if items else "אין שינויים")
+        return f"{name}:\n" + "\n".join(items)
 
     return f"""📅 {header}
 
