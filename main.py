@@ -75,23 +75,23 @@ def calculate_omer():
         data = res.json()
 
         day = int(data["hd"])
-        month = data["hm"]
+        month_num = int(data["hm"].split()[0]) if data["hm"][0].isdigit() else None
 
-        # ניסן
-        if month == "Nisan" and day >= 16:
+        month_name = data["hm"]
+
+        # נזהה לפי שם (אבל יותר חכם)
+        if "Nisan" in month_name and day >= 16:
             return day - 15
 
-        # אייר
-        if month == "Iyyar":
+        if "Iyyar" in month_name or "Iyar" in month_name:
             return 15 + day
 
-        # סיון
-        if month == "Sivan" and day <= 5:
+        if "Sivan" in month_name and day <= 5:
             return 44 + day
 
         return None
 
-    except:
+    except Exception:
         return None
 
 def weekday():
