@@ -166,16 +166,31 @@ def build_message():
 
 # ===== קבלת משתמשים =====
 def poll_updates():
-    res = requests.get(f"{BASE_URL}/getUpdates").json()
+    try:
+        users, sha = get_users_from_github()
 
-    for update in res.get("result", []):
-        if "message" in update:
+        res = requests.get(f"{BASE_URL}/getUpdates").json()
+
+        for update in res.get("result", []):
+            if "message" not in update:
+                continue
+
             chat_id = update["message"]["chat"]["id"]
             text = update["message"].get("text", "")
 
             if text == "/start":
-                add_user(chat_id)
-                send(chat_id, "נרשמת בהצלחה 🙌")
+                if chat_id not in users:
+                    users.append(chat_id)
+                    save_users_to_github(users, sha)
+                    send(chat_id, "נרשמת בהצלחה 🙌 תקבל עדכון יומי")
+
+        # ⚠️ חשוב: לנקות updates כדי שלא יחזרו שוב
+        if res.get("result"):
+            last_update_id = res["result"][-1]["update_id"]
+            requests.get(f"{BASE_URL}/getUpdates?offset={last_update_id + 1}")
+
+    except Exception as e:
+        print("poll error:", e)
 
 
 # ===== main =====
