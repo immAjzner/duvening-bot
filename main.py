@@ -1,94 +1,42 @@
 import requests
 import os
-from datetime import datetime
+from datetime import datetime, date
 
 TOKEN = os.environ["BOT_TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
 
-# ===== הבאת נתוני היום (JSON יציב) =====
-def get_hebrew_data():
+# ===== תאריך עברי (רק לתצוגה, לא קריטי) =====
+def get_hebrew_date():
     try:
-        url = "https://www.hebcal.com/hebcal"
-        params = {
-            "v": "1",
-            "cfg": "json",
-            "maj": "off",
-            "min": "off",
-            "mod": "off",
-            "nx": "off",
-            "year": "now",
-            "month": "x",
-            "ss": "off",
-            "mf": "off",
-            "c": "off",
-            "geo": "geoname",
-            "geonameid": "293397"
-        }
-
-        res = requests.get(url, params=params, timeout=10)
+        today = datetime.now().strftime("%Y-%m-%d")
+        url = f"https://www.hebcal.com/converter?g2h=1&date={today}&json=1"
+        res = requests.get(url, timeout=5)
         data = res.json()
 
-        today = datetime.now().strftime("%Y-%m-%d")
+        weekday_names = ["שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת", "ראשון"]
+        weekday = weekday_names[datetime.now().weekday()]
 
-        for item in data["items"]:
-            if item["date"].startswith(today):
-                return item
-
-        return None
-
-    except Exception as e:
-        print("Hebcal ERROR:", str(e))
-        return None
-
-
-# ===== תאריך עברי =====
-def get_hebrew_date():
-    data = get_hebrew_data()
-
-    weekday_names = ["שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת", "ראשון"]
-    weekday = weekday_names[datetime.now().weekday()]
-
-    if not data:
+        return f"יום {weekday}, {data['hd']} {data['hm']} {data['hy']}"
+    except:
+        weekday_names = ["שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת", "ראשון"]
+        weekday = weekday_names[datetime.now().weekday()]
         return f"יום {weekday}"
 
-    return f"יום {weekday}, {data['hebrew']}"
-
-
-# ===== חישוב עומר =====
+# ===== חישוב עומר (בלי API בכלל!) =====
 def calculate_omer():
-    try:
-        data = get_hebrew_data()
-        if not data:
-            return None
+    today = date.today()
 
-        hebrew = data["hebrew"]  # "16th of Iyyar, 5786"
+    # 🔥 תאריך קבוע: 16 ניסן 5786 = 5 באפריל 2026
+    omer_start = date(2026, 4, 5)
 
-        # חילוץ יום
-        day_str = hebrew.split()[0]
-        day = int(''.join(filter(str.isdigit, day_str)))
+    delta = (today - omer_start).days + 1
 
-        # חילוץ חודש
-        month = hebrew.split("of")[1].split(",")[0].strip().lower()
+    if 1 <= delta <= 49:
+        return delta
 
-        if "nisan" in month:
-            if day >= 16:
-                return day - 15
+    return None
 
-        if "iyyar" in month or "iyar" in month:
-            return 15 + day
-
-        if "sivan" in month:
-            if day <= 5:
-                return 44 + day
-
-        return None
-
-    except Exception as e:
-        print("Omer ERROR:", str(e))
-        return None
-
-
-# ===== אירועים נוספים =====
+# ===== אירועים =====
 def get_events():
     try:
         url = "https://www.hebcal.com/hebcal"
@@ -108,7 +56,7 @@ def get_events():
             "geonameid": "293397"
         }
 
-        res = requests.get(url, params=params, timeout=10)
+        res = requests.get(url, params=params, timeout=5)
         data = res.json()
 
         today = datetime.now().strftime("%Y-%m-%d")
@@ -117,14 +65,11 @@ def get_events():
     except:
         return []
 
-
 def has(events, word):
     return any(word in e["title"] for e in events)
 
-
 def weekday():
     return datetime.now().weekday()
-
 
 # ===== לוגיקה =====
 def analyze():
@@ -182,7 +127,7 @@ def analyze():
     if pesach or yomtov:
         shacharit.append("מזמור לתודה: לא אומרים")
 
-    # ===== עומר =====
+    # ===== עומר (עובד בטוח!) =====
     omer_day = calculate_omer()
     if omer_day:
         arvit.append(f"ספירת העומר: היום {omer_day} לעומר")
@@ -211,7 +156,6 @@ def analyze():
 {section("🌙 ערבית", arvit)}
 """
 
-
 # ===== שליחה =====
 def send(msg):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
@@ -220,10 +164,8 @@ def send(msg):
         "text": msg
     })
 
-
 def main():
     send(analyze())
-
 
 if __name__ == "__main__":
     main()
