@@ -5,66 +5,90 @@ from datetime import datetime
 TOKEN = os.environ["BOT_TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
 
-HEBREW_CACHE = None
-
+# ===== הבאת נתוני היום (JSON יציב) =====
 def get_hebrew_data():
-    global HEBREW_CACHE
-
-    if HEBREW_CACHE is not None:
-        return HEBREW_CACHE
-
     try:
+        url = "https://www.hebcal.com/hebcal"
+        params = {
+            "v": "1",
+            "cfg": "json",
+            "maj": "off",
+            "min": "off",
+            "mod": "off",
+            "nx": "off",
+            "year": "now",
+            "month": "x",
+            "ss": "off",
+            "mf": "off",
+            "c": "off",
+            "geo": "geoname",
+            "geonameid": "293397"
+        }
+
+        res = requests.get(url, params=params, timeout=10)
+        data = res.json()
+
         today = datetime.now().strftime("%Y-%m-%d")
-        url = f"https://www.hebcal.com/converter?g2h=1&date={today}&json=1"
-        res = requests.get(url, timeout=10)
 
-        print("Hebcal status:", res.status_code)
-        print("Hebcal raw:", res.text[:200])
+        for item in data["items"]:
+            if item["date"].startswith(today):
+                return item
 
-        if res.status_code != 200 or not res.text:
-            return None
-
-        HEBREW_CACHE = res.json()
-        return HEBREW_CACHE
+        return None
 
     except Exception as e:
         print("Hebcal ERROR:", str(e))
         return None
 
+
+# ===== תאריך עברי =====
 def get_hebrew_date():
     data = get_hebrew_data()
+
     weekday_names = ["שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת", "ראשון"]
     weekday = weekday_names[datetime.now().weekday()]
 
     if not data:
         return f"יום {weekday}"
 
-    return f"יום {weekday}, {data['hd']} {data['hm']} {data['hy']}"
+    return f"יום {weekday}, {data['hebrew']}"
 
+
+# ===== חישוב עומר =====
 def calculate_omer():
-    data = get_hebrew_data()
+    try:
+        data = get_hebrew_data()
+        if not data:
+            return None
 
-    if not data:
-        print("Fallback: no hebrew data → skipping omer")
+        hebrew = data["hebrew"]  # "16th of Iyyar, 5786"
+
+        # חילוץ יום
+        day_str = hebrew.split()[0]
+        day = int(''.join(filter(str.isdigit, day_str)))
+
+        # חילוץ חודש
+        month = hebrew.split("of")[1].split(",")[0].strip().lower()
+
+        if "nisan" in month:
+            if day >= 16:
+                return day - 15
+
+        if "iyyar" in month or "iyar" in month:
+            return 15 + day
+
+        if "sivan" in month:
+            if day <= 5:
+                return 44 + day
+
         return None
 
-    day = int(data["hd"])
-    month = data["hm"].split()[0].lower()
+    except Exception as e:
+        print("Omer ERROR:", str(e))
+        return None
 
-    if month in ["nisan", "nissan", "ניסן"]:
-        if day >= 16:
-            return day - 15
 
-    if month in ["iyar", "iyyar", "אייר"]:
-        return 15 + day
-
-    if month in ["sivan", "סיון"]:
-        if day <= 5:
-            return 44 + day
-
-    return None
-
-# ===== אירועים =====
+# ===== אירועים נוספים =====
 def get_events():
     try:
         url = "https://www.hebcal.com/hebcal"
@@ -93,14 +117,17 @@ def get_events():
     except:
         return []
 
+
 def has(events, word):
     return any(word in e["title"] for e in events)
+
 
 def weekday():
     return datetime.now().weekday()
 
+
 # ===== לוגיקה =====
-def analyze():    
+def analyze():
     events = get_events()
     wd = weekday()
 
@@ -184,6 +211,7 @@ def analyze():
 {section("🌙 ערבית", arvit)}
 """
 
+
 # ===== שליחה =====
 def send(msg):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
@@ -192,8 +220,10 @@ def send(msg):
         "text": msg
     })
 
+
 def main():
     send(analyze())
+
 
 if __name__ == "__main__":
     main()
