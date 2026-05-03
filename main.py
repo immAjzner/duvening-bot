@@ -25,25 +25,35 @@ def get_hebrew_date():
 
     return f"יום {weekday}, {data['hd']} {data['hm']} {data['hy']}"
 
-# ===== עומר (חישוב נכון!) =====
+# ===== עומר (פתרון סופי!) =====
 def calculate_omer():
-    data = get_hebrew_data()
-    if not data:
+    try:
+        today = datetime.now().strftime("%Y-%m-%d")
+
+        # ט"ז ניסן 2024 כבסיס (אפשר גם שנה נוכחית, זה לא משנה כי אנחנו מחשבים לפי שנה)
+        url = f"https://www.hebcal.com/converter?g2h=1&date={today}&json=1"
+        res = requests.get(url, timeout=10)
+        data = res.json()
+
+        hd = int(data["hd"])
+        hm = data["hm"]
+
+        # נזהה לפי שם חלקי בלבד
+        hm = hm.lower()
+
+        if "nisan" in hm and hd >= 16:
+            return hd - 15
+
+        if "iyar" in hm:
+            return 15 + hd
+
+        if "sivan" in hm and hd <= 5:
+            return 44 + hd
+
         return None
 
-    day = int(data["hd"])
-    month = data["hm"]
-
-    if month == "Nisan" and day >= 16:
-        return day - 15
-
-    if month in ["Iyyar", "Iyar"]:
-        return 15 + day
-
-    if month == "Sivan" and day <= 5:
-        return 44 + day
-
-    return None
+    except:
+        return None
 
 # ===== אירועים =====
 def get_events():
@@ -136,7 +146,7 @@ def analyze():
     if pesach or yomtov:
         shacharit.append("מזמור לתודה: לא אומרים")
 
-    # ===== עומר (עכשיו עובד!) =====
+    # ===== עומר =====
     omer_day = calculate_omer()
     if omer_day:
         arvit.append(f"ספירת העומר: היום {omer_day} לעומר")
