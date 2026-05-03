@@ -168,11 +168,11 @@ def analyze():
 
 שינויים להיום:
 
-{section("🌅 1שחרית", shacharit)}
+{section("🌅 שחרית", shacharit)}
 
-{section("🌇 מ2נחה", mincha)}
+{section("🌇 מנחה", mincha)}
 
-{section("🌙 3ערבית", arvit)}
+{section("🌙 ערבית", arvit)}
 """
 
 # ===== שליחה =====
