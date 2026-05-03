@@ -27,30 +27,58 @@ def get_hebrew_date():
 
 def calculate_omer():
     try:
+        print("=== DEBUG OMER START ===")
+
         data = get_hebrew_data()
+        print("Raw data:", data)
+
         if not data:
+            print("No data returned from Hebcal")
             return None
 
-        day = int(data["hd"])
+        day = data.get("hd")
+        month_raw = data.get("hm")
 
-        # 🔥 נחלץ רק את שם החודש
-        month = data["hm"].split()[0].lower()
+        print("Raw day:", day)
+        print("Raw month field:", month_raw)
 
-        # נרמול שמות
+        # בדיקות הגנה
+        if not day or not month_raw:
+            print("Missing day or month")
+            return None
+
+        day = int(day)
+
+        # חילוץ שם חודש
+        month = str(month_raw).split()[0].lower()
+        print("Parsed month:", month)
+
+        # תנאים
         if month in ["nisan", "nissan", "ניסן"]:
+            print("Matched Nisan")
             if day >= 16:
-                return day - 15
+                result = day - 15
+                print("Omer day:", result)
+                return result
 
         if month in ["iyar", "iyyar", "אייר"]:
-            return 15 + day
+            print("Matched Iyar")
+            result = 15 + day
+            print("Omer day:", result)
+            return result
 
         if month in ["sivan", "סיון"]:
+            print("Matched Sivan")
             if day <= 5:
-                return 44 + day
+                result = 44 + day
+                print("Omer day:", result)
+                return result
 
+        print("No condition matched → returning None")
         return None
 
-    except Exception:
+    except Exception as e:
+        print("ERROR in calculate_omer:", str(e))
         return None
 
 # ===== אירועים =====
