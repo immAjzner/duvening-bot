@@ -139,20 +139,24 @@ def analyze():
     mincha = list(dict.fromkeys(mincha))
     arvit = list(dict.fromkeys(arvit))
 
-    # בניית הודעה
-    sections = []
-
-    if shacharit:
-        sections.append("🌅 שחרית:\n" + "\n".join(shacharit))
-    if mincha:
-        sections.append("🌇 מנחה:\n" + "\n".join(mincha))
-    if arvit:
-        sections.append("🌙 ערבית:\n" + "\n".join(arvit))
-
+    # ===== בניית הודעה (אופציה 2) =====
     header = get_hebrew_date()
 
-    if not sections:
+    def format_section(title, items):
+        if items:
+            return f"{title}:\n" + "\n".join(items)
+        else:
+            return f"{title}:\nאין שינויים"
+
+    # אם אין שום שינוי בכלל
+    if not shacharit and not mincha and not arvit:
         return f"📅 {header}\n\nהיום הכל כרגיל בתפילות"
+
+    sections = [
+        format_section("🌅 שחרית", shacharit),
+        format_section("🌇 מנחה", mincha),
+        format_section("🌙 ערבית", arvit),
+    ]
 
     return f"📅 {header}\n\nשינויים להיום:\n\n" + "\n\n".join(sections)
 
