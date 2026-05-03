@@ -5,8 +5,20 @@ from datetime import datetime
 TOKEN = os.environ["BOT_TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
 
-def get_events():
+# ===== תאריך עברי =====
+def get_hebrew_date():
     today = datetime.now().strftime("%Y-%m-%d")
+    url = f"https://www.hebcal.com/converter?g2h=1&date={today}&json=1"
+    data = requests.get(url).json()
+
+    hebrew = f"{data['hd']} {data['hm']} {data['hy']}"
+    weekday_names = ["שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת", "ראשון"]
+    weekday = weekday_names[datetime.now().weekday()]
+
+    return f"יום {weekday}, {hebrew}"
+
+# ===== שליפת אירועים =====
+def get_events():
     url = "https://www.hebcal.com/hebcal"
     params = {
         "v": "1",
@@ -23,9 +35,10 @@ def get_events():
         "geo": "geoname",
         "geonameid": "2925533"
     }
+
     data = requests.get(url, params=params).json()
-    today_events = [e for e in data["items"] if e["date"].startswith(datetime.now().strftime("%Y-%m-%d"))]
-    return today_events
+    today = datetime.now().strftime("%Y-%m-%d")
+    return [e for e in data["items"] if e["date"].startswith(today)]
 
 def has(events, word):
     return any(word in e["title"] for e in events)
@@ -39,6 +52,7 @@ def get_omer(events):
 def weekday():
     return datetime.now().weekday()  # 0=Mon
 
+# ===== לוגיקה הלכתית =====
 def analyze():
     events = get_events()
     wd = weekday()
@@ -47,7 +61,7 @@ def analyze():
     mincha = []
     arvit = []
 
-    # ===== זיהוי =====
+    # זיהוי ימים
     rc = has(events, "Rosh Chodesh")
     chanukah = has(events, "Chanukah")
     pesach = has(events, "Pesach")
@@ -56,25 +70,26 @@ def analyze():
     sukkot = has(events, "Sukkot")
     atzmaut = has(events, "Yom HaAtzmaut")
     yerushalayim = has(events, "Yom Yerushalayim")
+    isru = has(events, "Isru Chag")
+    erev = has(events, "Erev")
 
     yomtov = any([pesach, shavuot, sukkot])
 
     # ===== תחנון =====
     no_tachanun = any([
-        rc, chanukah, pesach, shavuot, sukkot, chol, atzmaut
+        rc, chanukah, pesach, shavuot, sukkot, chol, atzmaut, isru
     ])
 
     if no_tachanun:
         shacharit.append("תחנון: לא אומרים")
         mincha.append("תחנון: לא אומרים")
     else:
-        if wd in [0, 3]:  # שני/חמישי
+        if wd in [0, 3]:  # שני / חמישי
             shacharit.append("תחנון: ארוך")
         else:
             shacharit.append("תחנון: רגיל")
 
-    # ערב חג (אין תחנון במנחה)
-    if has(events, "Erev"):
+    if erev:
         mincha.append("תחנון: לא אומרים")
 
     # ===== הלל =====
@@ -94,22 +109,17 @@ def analyze():
     if pesach or yomtov:
         shacharit.append("מזמור לתודה: לא אומרים")
 
-    # ===== אסרו חג =====
-    if has(events, "Isru Chag"):
-        shacharit.append("תחנון: לא אומרים")
-        mincha.append("תחנון: לא אומרים")
-
     # ===== ספירת העומר =====
     omer = get_omer(events)
     if omer:
         arvit.append(omer)
 
-    # ===== ניקוי כפילויות =====
+    # ניקוי כפילויות
     shacharit = list(dict.fromkeys(shacharit))
     mincha = list(dict.fromkeys(mincha))
     arvit = list(dict.fromkeys(arvit))
 
-    # ===== בניית הודעה =====
+    # בניית הודעה
     sections = []
 
     if shacharit:
@@ -119,11 +129,14 @@ def analyze():
     if arvit:
         sections.append("🌙 ערבית:\n" + "\n".join(arvit))
 
+    header = get_hebrew_date()
+
     if not sections:
-        return "📅 היום הכל כרגיל בתפילות"
+        return f"📅 {header}\n\nהיום הכל כרגיל בתפילות"
 
-    return "📅 שינויים להיום:\n\n" + "\n\n".join(sections)
+    return f"📅 {header}\n\nשינויים להיום:\n\n" + "\n\n".join(sections)
 
+# ===== שליחה לטלגרם =====
 def send(msg):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     requests.post(url, data={
