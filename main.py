@@ -42,6 +42,14 @@ def save_last_run(today_str, sha):
     requests.put(url, headers=headers, json=data)
 
 def should_send_now():
+    today_str = date.today().isoformat()
+
+    last_run, sha = get_last_run()
+
+    print("DEBUG last_run:", last_run)
+
+    save_last_run(today_str, sha)
+
     return True
 
 # ===== GitHub USERS =====
