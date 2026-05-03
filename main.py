@@ -25,26 +25,26 @@ def get_hebrew_date():
 
     return f"יום {weekday}, {data['hd']} {data['hm']} {data['hy']}"
 
-# ===== עומר (פתרון סופי!) =====
 def calculate_omer():
     try:
         data = get_hebrew_data()
-        print(data)
         if not data:
             return None
 
         day = int(data["hd"])
-        month = data["hm"].lower()
 
-        # נרמול שמות חודשים (עברית + אנגלית)
-        if "nisan" in month or "ניסן" in month:
+        # 🔥 נחלץ רק את שם החודש
+        month = data["hm"].split()[0].lower()
+
+        # נרמול שמות
+        if month in ["nisan", "nissan", "ניסן"]:
             if day >= 16:
                 return day - 15
 
-        if "iyar" in month or "אייר" in month:
+        if month in ["iyar", "iyyar", "אייר"]:
             return 15 + day
 
-        if "sivan" in month or "סיון" in month:
+        if month in ["sivan", "סיון"]:
             if day <= 5:
                 return 44 + day
 
