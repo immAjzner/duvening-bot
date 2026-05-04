@@ -16,7 +16,7 @@ jobs:
         with:
           python-version: '3.11'
 
-      - run: pip install requests convertdate
+      - run: pip install requests convertdate pyluach
 
       - run: python main.py
         env:
