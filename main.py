@@ -203,10 +203,12 @@ def build_message():
 
     if sh_tach == "לא":
         shacharit.append("אין תחנון")
+    
     elif sh_tach == "ארוך":
-        shacharit.append("תחנון ארוך (והוא רחום)")
-    else:
         shacharit.append("אין שינויים (והוא רחום)")
+    
+    else:
+        shacharit.append("אין שינויים")
 
     shacharit += additions
 
