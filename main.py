@@ -3,50 +3,86 @@ import os
 import json
 import base64
 from datetime import datetime, date, timedelta
+from zoneinfo import ZoneInfo
 
 from convertdate import hebrew
-from pyluach import dates, hebrewcal
 
+# ===== CONFIG =====
 TOKEN = os.environ["BOT_TOKEN"]
 BASE_URL = f"https://api.telegram.org/bot{TOKEN}"
 
 GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
 REPO = os.environ["GITHUB_REPOSITORY"]
-FILE_PATH = "users.json"
 
-# ===== USERS =====
-def get_users_from_github():
-    url = f"https://api.github.com/repos/{REPO}/contents/{FILE_PATH}"
+USERS_FILE = "users.json"
+LAST_RUN_FILE = "last_run.json"
+
+TZ = ZoneInfo("Asia/Jerusalem")
+
+# ===== GITHUB FILES =====
+def get_file(path):
+    url = f"https://api.github.com/repos/{REPO}/contents/{path}"
     headers = {"Authorization": f"Bearer {GITHUB_TOKEN}"}
     res = requests.get(url, headers=headers)
 
     if res.status_code != 200:
-        return [], None
+        return None, None
 
     data = res.json()
     content = base64.b64decode(data["content"]).decode("utf-8")
     return json.loads(content), data["sha"]
 
-def save_users_to_github(users, sha):
-    url = f"https://api.github.com/repos/{REPO}/contents/{FILE_PATH}"
+
+def save_file(path, content_obj, sha, message):
+    url = f"https://api.github.com/repos/{REPO}/contents/{path}"
     headers = {"Authorization": f"Bearer {GITHUB_TOKEN}"}
 
-    content = json.dumps(users, ensure_ascii=False, indent=2)
+    content = json.dumps(content_obj, ensure_ascii=False, indent=2)
     encoded = base64.b64encode(content.encode()).decode()
 
     data = {
-        "message": "update users",
+        "message": message,
         "content": encoded,
         "sha": sha
     }
 
     requests.put(url, headers=headers, json=data)
 
+# ===== USERS =====
+def get_users():
+    data, sha = get_file(USERS_FILE)
+    return (data or []), sha
+
 def add_user(chat_id):
-    users, sha = get_users_from_github()
+    users, sha = get_users()
     if chat_id not in users:
         users.append(chat_id)
-        save_users_to_github(users, sha)
+        save_file(USERS_FILE, users, sha, "add user")
+
+# ===== LAST RUN =====
+def get_last_run():
+    return get_file(LAST_RUN_FILE)
+
+def save_last_run(today_str, sha):
+    save_file(LAST_RUN_FILE, {"date": today_str}, sha, "update last run")
+
+# ===== SCHEDULING =====
+def should_send_now():
+    now = datetime.now(TZ)
+
+    # שליחה בין 06:00–08:59
+    if not (6 <= now.hour <= 8):
+        return False
+
+    today_str = now.date().isoformat()
+
+    last_run, sha = get_last_run()
+
+    if last_run and last_run.get("date") == today_str:
+        return False
+
+    save_last_run(today_str, sha)
+    return True
 
 # ===== TELEGRAM =====
 def send(chat_id, msg):
@@ -56,7 +92,7 @@ def send(chat_id, msg):
     })
 
 def broadcast(msg):
-    users, _ = get_users_from_github()
+    users, _ = get_users()
     for u in users:
         send(u, msg)
 
@@ -91,20 +127,24 @@ def hebrew_year(y):
             y -= v
     return result[:-1] + "״" + result[-1]
 
-def get_hebrew_date():
-    today = date.today()
-    y, m, d = hebrew.from_gregorian(today.year, today.month, today.day)
+def get_hebrew_date(for_date=None):
+    if not for_date:
+        for_date = date.today()
+
+    y, m, d = hebrew.from_gregorian(for_date.year, for_date.month, for_date.day)
 
     months = ["","ניסן","אייר","סיון","תמוז","אב","אלול","תשרי","חשוון","כסלו","טבת","שבט","אדר"]
     weekdays = ["שני","שלישי","רביעי","חמישי","שישי","שבת","ראשון"]
 
-    wd = datetime.now().weekday()
+    wd = datetime.now(TZ).weekday()
     return f"יום {weekdays[wd]}, {hebrew_number(d)} ב{months[m]} {hebrew_year(y)}"
 
 # ===== OMER =====
-def calculate_omer():
-    today = date.today()
-    y, m, d = hebrew.from_gregorian(today.year, today.month, today.day)
+def calculate_omer(for_date=None):
+    if not for_date:
+        for_date = date.today()
+
+    y, m, d = hebrew.from_gregorian(for_date.year, for_date.month, for_date.day)
 
     if m == 1 and d >= 16: return d - 15
     if m == 2: return 15 + d
@@ -112,49 +152,58 @@ def calculate_omer():
 
     return None
 
-# ===== HYBRID HALACHIC ENGINE =====
-def hybrid_tachanun():
+# ===== HOLIDAYS =====
+def is_yomtov(m, d):
+    return (
+        (m == 1 and d in [15,16,21,22]) or
+        (m == 3 and d in [6,7]) or
+        (m == 7 and d in [1,2,10,15,16,22,23])
+    )
+
+def is_shabbat():
+    return datetime.now(TZ).weekday() == 5
+
+def is_yomtov_today():
     today = date.today()
-    wd = datetime.now().weekday()
+    y,m,d = hebrew.from_gregorian(today.year, today.month, today.day)
+    return is_yomtov(m,d)
 
-    y, m, d = hebrew.from_gregorian(today.year, today.month, today.day)
+def is_erev_special():
+    tomorrow = date.today() + timedelta(days=1)
+    wd = datetime.now(TZ).weekday()
+    y,m,d = hebrew.from_gregorian(tomorrow.year, tomorrow.month, tomorrow.day)
 
-    # ===== בסיס (מנוע הלכתי) =====
-    no_tachanun = False
+    return wd == 4 or is_yomtov(m,d)
 
-    # ניסן
-    if m == 1:
-        no_tachanun = True
+def is_isru_chag(m, d):
+    return (
+        (m == 1 and d == 23) or
+        (m == 3 and d == 7) or
+        (m == 7 and d == 23)
+    )
 
-    # סיון
-    if m == 3:
-        no_tachanun = True
+# ===== TACHANUN =====
+def calculate_tachanun(for_date=None):
+    if not for_date:
+        for_date = date.today()
 
-    # ל"ג בעומר
-    if m == 2 and d == 18:
-        no_tachanun = True
+    wd = datetime.now(TZ).weekday()
+    y,m,d = hebrew.from_gregorian(for_date.year, for_date.month, for_date.day)
 
-    # חנוכה
-    if (m == 9 and d >= 25) or (m == 10 and d <= 2):
-        no_tachanun = True
-
-    # פורים
-    if (m == 12 and d == 14) or (m == 12 and d == 15):
-        no_tachanun = True
-
-    # ===== override ציוני =====
-    if m == 2 and d in [4,5,28]:
-        no_tachanun = True
-
-    # ערב יום שאין תחנון
-    tomorrow = today + timedelta(days=1)
+    tomorrow = for_date + timedelta(days=1)
     y2,m2,d2 = hebrew.from_gregorian(tomorrow.year, tomorrow.month, tomorrow.day)
 
-    if (m2 == 2 and d2 == 18):
-        return "רגיל" if wd not in [0,3] else "ארוך", "לא"
-
-    if no_tachanun:
+    if m == 1 or m == 3:
         return "לא", "לא"
+
+    if m == 2 and d == 18:
+        return "לא", "לא"
+
+    if is_yomtov(m,d) or is_isru_chag(m,d):
+        return "לא", "לא"
+
+    if (m2 == 2 and d2 == 18) or is_yomtov(m2,d2):
+        return ("ארוך" if wd in [0,3] else "רגיל"), "לא"
 
     if wd in [0,3]:
         return "ארוך", "רגיל"
@@ -162,9 +211,11 @@ def hybrid_tachanun():
     return "רגיל", "רגיל"
 
 # ===== ADDITIONS =====
-def hybrid_additions():
-    today = date.today()
-    y, m, d = hebrew.from_gregorian(today.year, today.month, today.day)
+def calculate_additions(for_date=None):
+    if not for_date:
+        for_date = date.today()
+
+    y,m,d = hebrew.from_gregorian(for_date.year, for_date.month, for_date.day)
 
     additions = []
 
@@ -176,39 +227,35 @@ def hybrid_additions():
     elif d == 1 or d == 30:
         additions.append("הלל בדילוג")
 
-    # override ציוני
     if m == 2 and d in [4,5,28]:
         additions.append("הלל שלם")
 
-    # למנצח
-    sh,_ = hybrid_tachanun()
+    sh,_ = calculate_tachanun(for_date)
     if sh == "לא":
         additions.append("אין למנצח")
 
-    # מזמור לתודה
-    if m == 1:
+    if m == 1 or is_yomtov(m,d):
         additions.append("אין מזמור לתודה")
 
     return additions
 
 # ===== MESSAGE =====
-def build_message():
-    header = get_hebrew_date()
+def build_message(for_date=None):
+    if not for_date:
+        for_date = date.today()
 
-    sh_tach, min_tach = hybrid_tachanun()
-    additions = hybrid_additions()
-    omer = calculate_omer()
+    header = get_hebrew_date(for_date)
 
-    shacharit = []
+    sh_tach, min_tach = calculate_tachanun(for_date)
+    additions = calculate_additions(for_date)
+    omer = calculate_omer(for_date)
 
     if sh_tach == "לא":
-        shacharit.append("אין תחנון")
-    
+        shacharit = ["אין תחנון"]
     elif sh_tach == "ארוך":
-        shacharit.append("אין שינויים (והוא רחום)")
-    
+        shacharit = ["אין שינויים (והוא רחום)"]
     else:
-        shacharit.append("אין שינויים")
+        shacharit = ["אין שינויים"]
 
     shacharit += additions
 
@@ -231,7 +278,7 @@ def build_message():
 # ===== UPDATES =====
 def poll_updates():
     res = requests.get(f"{BASE_URL}/getUpdates").json()
-    users, sha = get_users_from_github()
+    users, sha = get_users()
 
     for u in res.get("result", []):
         if "message" not in u:
@@ -243,13 +290,26 @@ def poll_updates():
         if text == "/start":
             if chat_id not in users:
                 users.append(chat_id)
-                save_users_to_github(users, sha)
+                save_file(USERS_FILE, users, sha, "add user")
                 send(chat_id, "נרשמת בהצלחה 🙌")
 
 # ===== MAIN =====
 def main():
     poll_updates()
-    broadcast(build_message())
+
+    if not should_send_now():
+        return
+
+    if is_shabbat() or is_yomtov_today():
+        return
+
+    msg = build_message()
+
+    if is_erev_special():
+        msg += "\n\n📅 גם למחר:\n\n"
+        msg += build_message(date.today() + timedelta(days=1))
+
+    broadcast(msg)
 
 if __name__ == "__main__":
     main()
