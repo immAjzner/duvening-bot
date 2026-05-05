@@ -149,70 +149,76 @@ def calculate_omer(for_date=None):
 
     return None
 
-# ===== למנצח לפי התמונה =====
+# ===== HOLIDAYS =====
+def is_yomtov(m, d):
+    return (
+        (m == 1 and d in [15,16,21,22]) or
+        (m == 3 and d in [6,7]) or
+        (m == 7 and d in [1,2,10,15,16,22,23])
+    )
+
+def is_shabbat():
+    return datetime.now(TZ).weekday() == 5
+
+def is_yomtov_today():
+    today = date.today()
+    y,m,d = hebrew.from_gregorian(today.year, today.month, today.day)
+    return is_yomtov(m,d)
+
+def is_erev_special():
+    tomorrow = date.today() + timedelta(days=1)
+    wd = datetime.now(TZ).weekday()
+    y,m,d = hebrew.from_gregorian(tomorrow.year, tomorrow.month, tomorrow.day)
+
+    return wd == 4 or is_yomtov(m,d)
+
+# ===== למנצח =====
 def has_lamenatzeach(m, d):
-    # ראש חודש
     if d == 1 or d == 30:
         return False
 
-    # ערב יום כיפור
     if m == 7 and d == 9:
         return False
 
-    # ===== ערב יום טוב (חדש) =====
-    # ערב פסח
     if m == 1 and d == 14:
         return False
-
-    # ערב שבועות
     if m == 3 and d == 5:
         return False
-
-    # ערב סוכות
     if m == 7 and d == 14:
         return False
-
-    # ערב שמחת תורה (בחו"ל זה 22, בארץ פחות רלוונטי אבל נשאיר)
     if m == 7 and d == 21:
         return False
 
-    # ===== חנוכה =====
     if (m == 9 and d >= 25) or (m == 10 and d <= 2):
         return False
 
-    # ===== פורים =====
     if m == 12 and d == 14:
         return False
-    
-    # פורים קטן
+
     if m == 13 and d == 14:
         return False
 
-    # ===== חול המועד =====
     if m == 1 and 16 <= d <= 20:
         return False
-
     if m == 7 and 16 <= d <= 20:
         return False
 
-    # ===== אסרו חג =====
     if (m == 1 and d == 22) or (m == 3 and d == 7) or (m == 7 and d == 23):
         return False
 
-    # ===== ימים מיוחדים =====
-    if m == 2 and d in [4, 5]:  # יום העצמאות (בקירוב)
+    if m == 2 and d == 5:
         return False
 
-    if m == 2 and d == 28:  # יום ירושלים
+    if m == 2 and d == 28:
         return False
 
-    if m == 5 and d == 9:  # תשעה באב
+    if m == 5 and d == 9:
         return False
 
-    if m == 5 and d == 15:  # ט"ו באב
+    if m == 5 and d == 15:
         return False
 
-    if m == 11 and d == 15:  # ט"ו בשבט
+    if m == 11 and d == 15:
         return False
 
     return True
@@ -254,16 +260,13 @@ def build_message(for_date=None):
 
     y,m,d = hebrew.from_gregorian(for_date.year, for_date.month, for_date.day)
 
-    shacharit = []
-
     if sh_tach == "לא":
-        shacharit.append("אין תחנון")
+        shacharit = ["אין תחנון"]
     elif sh_tach == "ארוך":
-        shacharit.append("אין שינויים (והוא רחום)")
+        shacharit = ["אין שינויים (והוא רחום)"]
     else:
-        shacharit.append("אין שינויים")
+        shacharit = ["אין שינויים"]
 
-    # למנצח
     if not has_lamenatzeach(m,d):
         shacharit.append("אין למנצח")
 
@@ -305,7 +308,6 @@ def poll_updates():
 def main():
     poll_updates()
 
-    # read FORCE_SEND from environment
     force_send = os.environ.get("FORCE_SEND") == "1"
 
     if not force_send:
