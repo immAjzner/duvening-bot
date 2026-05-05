@@ -506,6 +506,10 @@ def build_message(for_date=None):
     if not has_lamenatzeach(m,d):
         shacharit.append("אין למנצח")
 
+    if is_shabbat():
+        if not say_av_harachamim(for_date):
+            shacharit.append("אין אב הרחמים")
+
     if rc_state in ["day1", "day2"] or needs_yaale_veyavo(for_date):
         mincha = ["אין תחנון", "יעלה ויבוא"]
     
