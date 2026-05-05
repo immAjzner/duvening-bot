@@ -375,6 +375,34 @@ def calculate_tachanun(for_date=None):
 
     return "רגיל", "רגיל"
 
+def say_vihi_noam(for_date=None):
+    if not for_date:
+        for_date = date.today()
+
+    # רק מוצאי שבת
+    if datetime.now(TZ).weekday() != 6:
+        return True
+
+    # אם היום עצמו (מוצ"ש) כבר יום טוב — לא אומרים
+    y, m, d = hebrew.from_gregorian(for_date.year, for_date.month, for_date.day)
+    if is_yomtov(m, d):
+        return False
+
+    # בדיקה קדימה לשבוע הקרוב
+    for i in range(1, 7):
+        future = for_date + timedelta(days=i)
+        y2, m2, d2 = hebrew.from_gregorian(future.year, future.month, future.day)
+
+        # יום טוב
+        if is_yomtov(m2, d2):
+            return False
+
+        # חול המועד
+        if (m2 == 1 and 16 <= d2 <= 20) or (m2 == 7 and 16 <= d2 <= 20):
+            return False
+
+    return True
+
 def get_day_name(m, d):
     if m == 2 and d == 18:
         return "ל״ג בעומר"
@@ -543,6 +571,11 @@ def build_message(for_date=None):
             mincha.append("אין צדקתך")                          
 
     arvit = []
+
+    # ===== ויהי נועם =====
+    if datetime.now(TZ).weekday() == 6:  # מוצאי שבת
+        if not say_vihi_noam(for_date):
+            arvit.append("אין ויהי נעם")    
 
     if rc_state == "erev":
         arvit.append("יעלה ויבוא")
