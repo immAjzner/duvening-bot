@@ -405,7 +405,7 @@ def build_message(for_date=None):
     arvit = []
 
     if rc_state == "erev":
-    arvit.append("יעלה ויבוא")
+        arvit.append("יעלה ויבוא")
 
     elif needs_yaale_veyavo(for_date):
         # ערבית של יום טוב / חול המועד
