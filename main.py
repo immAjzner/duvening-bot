@@ -15,6 +15,7 @@ REPO = os.environ["GITHUB_REPOSITORY"]
 
 USERS_FILE = "users.json"
 LAST_RUN_FILE = "last_run.json"
+MY_CHAT_ID = "5474184664"
 
 TZ = ZoneInfo("Asia/Jerusalem")
 
@@ -310,9 +311,13 @@ def main():
 
     force_send = os.environ.get("FORCE_SEND") == "1"
 
-    if not force_send:
-        if not should_send_now():
-            return
+    if force_send:
+        # שליחה רק אליך
+        send(MY_CHAT_ID, build_message())
+        return
+
+    if not should_send_now():
+        return
 
     if is_shabbat() or is_yomtov_today():
         return
