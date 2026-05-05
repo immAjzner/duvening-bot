@@ -305,10 +305,22 @@ def poll_updates():
 def main():
     poll_updates()
 
-    if not should_send_now():
+    # read FORCE_SEND from environment
+    force_send = os.environ.get("FORCE_SEND") == "1"
+
+    if not force_send:
+        if not should_send_now():
+            return
+
+    if is_shabbat() or is_yomtov_today():
         return
 
     msg = build_message()
+
+    if is_erev_special():
+        msg += "\n\n📅 גם למחר:\n\n"
+        msg += build_message(date.today() + timedelta(days=1))
+
     broadcast(msg)
 
 if __name__ == "__main__":
