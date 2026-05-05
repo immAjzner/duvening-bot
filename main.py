@@ -232,6 +232,9 @@ def calculate_tachanun(for_date=None):
     wd = datetime.now(TZ).weekday()
     y,m,d = hebrew.from_gregorian(for_date.year, for_date.month, for_date.day)
 
+    if d == 1 or d == 30:
+        return "לא", "לא"
+
     tomorrow = for_date + timedelta(days=1)
     y2,m2,d2 = hebrew.from_gregorian(tomorrow.year, tomorrow.month, tomorrow.day)
 
@@ -296,6 +299,36 @@ def get_greeting(m, d):
 
     return ""
 
+def get_rosh_chodesh_state(for_date=None):
+    if not for_date:
+        for_date = date.today()
+
+    today = for_date
+    yesterday = today - timedelta(days=1)
+    tomorrow = today + timedelta(days=1)
+
+    y, m, d = hebrew.from_gregorian(today.year, today.month, today.day)
+    y0, m0, d0 = hebrew.from_gregorian(yesterday.year, yesterday.month, yesterday.day)
+    y2, m2, d2 = hebrew.from_gregorian(tomorrow.year, tomorrow.month, tomorrow.day)
+
+    # יום ראשון של ראש חודש (א׳)
+    if d == 1:
+        return "day1"
+
+    # יום שני של ראש חודש (ל׳)
+    if d == 30:
+        return "day2"
+
+    # ערב ראש חודש (ערבית בלבד)
+    if d2 == 1 or d2 == 30:
+        return "erev"
+
+    # היום שאחרי יום 30 (יום 1 כבר טופל)
+    if d0 == 30:
+        return "day1"
+
+    return None
+
 # ===== MESSAGE =====
 def build_message(for_date=None):
     if not for_date:
@@ -313,20 +346,51 @@ def build_message(for_date=None):
     omer = calculate_omer(for_date)
 
     y,m,d = hebrew.from_gregorian(for_date.year, for_date.month, for_date.day)
+    shacharit = []
 
-    if sh_tach == "לא":
-        shacharit = ["אין תחנון"]
+    rc_state = get_rosh_chodesh_state(for_date)
+    
+    if rc_state in ["day1", "day2"]:
+        shacharit.append("אין תחנון")
+        shacharit.append("יעלה ויבוא")
+        shacharit.append("הלל בדילוג")
+        shacharit.append("ברכי נפשי")
+    
+    elif sh_tach == "לא":
+        shacharit.append("אין תחנון")
+    
     elif sh_tach == "ארוך":
-        shacharit = ["אין שינויים (והוא רחום)"]
+        shacharit.append("אין שינויים (והוא רחום)")
+    
     else:
-        shacharit = ["אין שינויים"]
-
+        shacharit.append("אין שינויים")
+    
     if not has_lamenatzeach(m,d):
         shacharit.append("אין למנצח")
 
-    mincha = ["אין תחנון"] if min_tach == "לא" else ["אין שינויים"]
+    if rc_state in ["day1", "day2"]:
+        mincha = ["אין תחנון", "יעלה ויבוא"]
+    else:
+        mincha = ["אין תחנון"] if min_tach == "לא" else ["אין שינויים"]    
 
-    arvit = [f"ספירת העומר: היום {omer+1} לעומר"] if omer else ["אין שינויים"]
+    arvit = []
+
+    if rc_state == "erev":
+        arvit.append("יעלה ויבוא")
+    
+    if omer:
+        arvit.append(f"ספירת העומר: היום {omer+1} לעומר")
+    
+    if not arvit:
+        arvit = ["אין שינויים"]
+
+    musaf = []
+
+    if rc_state in ["day1", "day2"]:
+        musaf.append("מוסף")
+    
+        if is_shabbat():
+            musaf.append("אתה יצרת")
 
     def section(name, items):
         return f"{name}:\n" + "\n".join(items)
@@ -334,6 +398,15 @@ def build_message(for_date=None):
     msg = f"""📅 {header}
 
     {section("🌅 שחרית", shacharit)}
+    """
+
+    if musaf:
+        if len(musaf) == 1:
+            msg += f"\n\n🕍 {musaf[0]}"
+        else:
+            msg += f"\n\n🕍 מוסף:\n" + "\n".join(musaf)
+
+    msg += f"""
     
     {section("🌇 מנחה", mincha)}
     
