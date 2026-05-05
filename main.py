@@ -151,6 +151,28 @@ def calculate_omer(for_date=None):
 
     return None
 
+def is_shabbat_mevarchim(for_date=None):
+    if not for_date:
+        for_date = date.today()
+
+    # רק שבת
+    if datetime.now(TZ).weekday() != 5:
+        return False
+
+    # תאריך עברי היום
+    hdate = dates.GregorianDate(for_date.year, for_date.month, for_date.day).to_heb()
+
+    # יום שבת הבא (ליתר ביטחון — pyluach עובד לפי תאריך)
+    # נבדוק אם בתוך השבוע הקרוב יש ראש חודש
+    for i in range(1, 7):
+        future = for_date + timedelta(days=i)
+        y, m, d = hebrew.from_gregorian(future.year, future.month, future.day)
+
+        if d == 1:
+            return True
+
+    return False
+
 # ===== HOLIDAYS =====
 def is_yomtov(m, d):
     return (
@@ -194,15 +216,8 @@ def say_av_harachamim(for_date=None):
     if sh == "לא":
         return False
 
-    # ========= שבת מברכים =========
-
-    # שבת מברכים = שבת שלפני ראש חודש
-    next_week = for_date + timedelta(days=7)
-    y2, m2, d2 = hebrew.from_gregorian(next_week.year, next_week.month, next_week.day)
-
-    is_mevarchim = (d2 == 1 or d2 == 30)
-
-    if is_mevarchim:
+    # שבת מברכים
+    if is_shabbat_mevarchim(for_date):
         # חריגים — כן אומרים
         if m in [2, 3]:  # אייר, סיון
             return True
