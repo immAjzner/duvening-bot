@@ -249,12 +249,65 @@ def calculate_tachanun(for_date=None):
 
     return "רגיל", "רגיל"
 
+def get_day_name(m, d):
+    if m == 2 and d == 18:
+        return "ל״ג בעומר"
+
+    if m == 12 and d == 14:
+        return "פורים"
+
+    if (m == 9 and d >= 25) or (m == 10 and d <= 2):
+        return "חנוכה"
+
+    if m == 7 and d in [1,2]:
+        return "ראש השנה"
+
+    if m == 7 and d == 10:
+        return "יום כיפור"
+
+    if m == 1 and d >= 15:
+        return "פסח"
+
+    if m == 3 and d == 6:
+        return "שבועות"
+
+    if m == 7 and d >= 15:
+        return "סוכות"
+
+    return None
+
+def get_greeting(m, d):
+    wd = datetime.now(TZ).weekday()
+
+    if wd == 4:  # יום שישי
+        return "שבת שלום!"
+
+    if m == 7 and d in [1,2]:
+        return "שנה טובה!"
+
+    if m == 7 and d == 10:
+        return "גמר חתימה טובה!"
+
+    if m == 5 and d == 9:
+        return "צום קל"
+
+    if get_day_name(m, d):
+        return "חג שמח!"
+
+    return ""
+
 # ===== MESSAGE =====
 def build_message(for_date=None):
     if not for_date:
         for_date = date.today()
 
     header = get_hebrew_date(for_date)
+
+    y, m, d = hebrew.from_gregorian(for_date.year, for_date.month, for_date.day)
+    
+    day_name = get_day_name(m, d)
+    if day_name:
+        header += f" - {day_name}"
 
     sh_tach, min_tach = calculate_tachanun(for_date)
     omer = calculate_omer(for_date)
@@ -278,14 +331,20 @@ def build_message(for_date=None):
     def section(name, items):
         return f"{name}:\n" + "\n".join(items)
 
-    return f"""📅 {header}
+    msg = f"""📅 {header}
 
-{section("🌅 שחרית", shacharit)}
+    {section("🌅 שחרית", shacharit)}
+    
+    {section("🌇 מנחה", mincha)}
+    
+    {section("🌙 ערבית", arvit)}
+    """
 
-{section("🌇 מנחה", mincha)}
-
-{section("🌙 ערבית", arvit)}
-"""
+    greeting = get_greeting(m, d)
+    if greeting:
+        msg += f"\n\n{greeting}"
+    
+    return msg    
 
 # ===== UPDATES =====
 def poll_updates():
