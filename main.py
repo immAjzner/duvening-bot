@@ -5,6 +5,7 @@ import base64
 from datetime import datetime, date, timedelta
 from zoneinfo import ZoneInfo
 from convertdate import hebrew
+from pyluach import dates, parshios
 
 # ===== CONFIG =====
 TOKEN = os.environ["BOT_TOKEN"]
@@ -165,6 +166,100 @@ def is_yomtov_today():
     today = date.today()
     y,m,d = hebrew.from_gregorian(today.year, today.month, today.day)
     return is_yomtov(m,d)
+
+def say_av_harachamim(for_date=None):
+    if not for_date:
+        for_date = date.today()
+
+    # רלוונטי רק בשבת
+    if datetime.now(TZ).weekday() != 5:
+        return False
+
+    y, m, d = hebrew.from_gregorian(for_date.year, for_date.month, for_date.day)
+
+    # ========= חריגים — כן אומרים =========
+
+    # שבת שלפני שבועות
+    if m == 3 and d in [4, 5]:
+        return True
+
+    # שבת שלפני תשעה באב
+    if m == 5 and d in [7, 8]:
+        return True
+
+    # ========= כלל בסיס =========
+    # אם אין תחנון ביום חול — לא אומרים אב הרחמים
+
+    sh, _ = calculate_tachanun(for_date)
+    if sh == "לא":
+        return False
+
+    # ========= שבת מברכים =========
+
+    # שבת מברכים = שבת שלפני ראש חודש
+    next_week = for_date + timedelta(days=7)
+    y2, m2, d2 = hebrew.from_gregorian(next_week.year, next_week.month, next_week.day)
+
+    is_mevarchim = (d2 == 1 or d2 == 30)
+
+    if is_mevarchim:
+        # חריגים — כן אומרים
+        if m in [2, 3]:  # אייר, סיון
+            return True
+        return False
+
+    # ארבע פרשיות
+    if is_four_parshiyot(for_date):
+        return False
+
+    # ========= ימים מיוחדים =========
+
+    # חנוכה
+    if (m == 9 and d >= 25) or (m == 10 and d <= 2):
+        return False
+
+    # פורים
+    if m == 12 and d == 14:
+        return False
+
+    # ט"ו בשבט
+    if m == 11 and d == 15:
+        return False
+
+    # ל"ג בעומר
+    if m == 2 and d == 18:
+        return False
+
+    # ערב חג (פסח/שבועות/ר"ה)
+    tomorrow = for_date + timedelta(days=1)
+    y3, m3, d3 = hebrew.from_gregorian(tomorrow.year, tomorrow.month, tomorrow.day)
+
+    if is_yomtov(m3, d3):
+        return False
+
+    # ========= ברירת מחדל =========
+    return True
+
+def is_four_parshiyot(for_date=None):
+    if not for_date:
+        for_date = date.today()
+
+    # המרה ללוח עברי של pyluach
+    hdate = dates.GregorianDate(for_date.year, for_date.month, for_date.day).to_heb()
+
+    # רק שבת
+    if datetime.now(TZ).weekday() != 5:
+        return False
+
+    parsha = parshios.getparsha(hdate)
+
+    # ארבע פרשיות
+    return parsha in [
+        "Shekalim",
+        "Zachor",
+        "Parah",
+        "Hachodesh"
+    ]
 
 def is_erev_special():
     tomorrow = date.today() + timedelta(days=1)
