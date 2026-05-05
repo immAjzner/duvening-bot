@@ -329,6 +329,30 @@ def get_rosh_chodesh_state(for_date=None):
 
     return None
 
+def needs_yaale_veyavo(for_date=None):
+    if not for_date:
+        for_date = date.today()
+
+    y, m, d = hebrew.from_gregorian(for_date.year, for_date.month, for_date.day)
+
+    # ראש חודש
+    if d == 1 or d == 30:
+        return True
+
+    # פסח (כולל חול המועד)
+    if m == 1 and d >= 15:
+        return True
+
+    # שבועות
+    if m == 3 and d == 6:
+        return True
+
+    # סוכות (כולל חול המועד)
+    if m == 7 and d >= 15:
+        return True
+
+    return False
+
 # ===== MESSAGE =====
 def build_message(for_date=None):
     if not for_date:
@@ -355,6 +379,10 @@ def build_message(for_date=None):
         shacharit.append("יעלה ויבוא")
         shacharit.append("הלל בדילוג")
         shacharit.append("ברכי נפשי")
+
+    elif needs_yaale_veyavo(for_date):
+        shacharit.append("אין תחנון")
+        shacharit.append("יעלה ויבוא")
     
     elif sh_tach == "לא":
         shacharit.append("אין תחנון")
@@ -368,15 +396,20 @@ def build_message(for_date=None):
     if not has_lamenatzeach(m,d):
         shacharit.append("אין למנצח")
 
-    if rc_state in ["day1", "day2"]:
+    if rc_state in ["day1", "day2"] or needs_yaale_veyavo(for_date):
         mincha = ["אין תחנון", "יעלה ויבוא"]
+    
     else:
-        mincha = ["אין תחנון"] if min_tach == "לא" else ["אין שינויים"]    
+        mincha = ["אין תחנון"] if min_tach == "לא" else ["אין שינויים"]
 
     arvit = []
 
     if rc_state == "erev":
-        arvit.append("יעלה ויבוא")
+    arvit.append("יעלה ויבוא")
+
+    elif needs_yaale_veyavo(for_date):
+        # ערבית של יום טוב / חול המועד
+        arvit.append("יעלה ויבוא")    
     
     if omer:
         arvit.append(f"ספירת העומר: היום {omer+1} לעומר")
