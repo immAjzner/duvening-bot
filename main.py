@@ -151,6 +151,19 @@ def calculate_omer(for_date=None):
 
     return None
 
+def say_tzidkatcha(for_date=None):
+    if not for_date:
+        for_date = date.today()
+
+    # רלוונטי רק בשבת
+    if datetime.now(TZ).weekday() != 5:
+        return True
+
+    # נבדוק אם ביום זה (אם היה חול) היו אומרים תחנון
+    sh, _ = calculate_tachanun(for_date)
+
+    return sh != "לא"
+
 def is_shabbat_mevarchim(for_date=None):
     if not for_date:
         for_date = date.today()
@@ -483,6 +496,8 @@ def build_message(for_date=None):
     shacharit = []
 
     rc_state = get_rosh_chodesh_state(for_date)
+
+    is_special_day = is_shabbat() or is_yomtov_today()
     
     if rc_state in ["day1", "day2"]:
         shacharit.append("אין תחנון")
@@ -493,18 +508,21 @@ def build_message(for_date=None):
     elif needs_yaale_veyavo(for_date):
         shacharit.append("אין תחנון")
         shacharit.append("יעלה ויבוא")
+
+    elif not is_special_day:
+        if sh_tach == "לא":
+            shacharit.append("אין תחנון")
     
-    elif sh_tach == "לא":
-        shacharit.append("אין תחנון")
+        elif sh_tach == "ארוך":
+            shacharit.append("אין שינויים (והוא רחום)")
+        
+        else:
+            shacharit.append("אין שינויים")
     
-    elif sh_tach == "ארוך":
-        shacharit.append("אין שינויים (והוא רחום)")
-    
-    else:
-        shacharit.append("אין שינויים")
-    
-    if not has_lamenatzeach(m,d):
-        shacharit.append("אין למנצח")
+    # למנצח — רק אם לא שבת/חג
+    if not is_special_day:
+        if not has_lamenatzeach(m,d):
+            shacharit.append("אין למנצח")
 
     if is_shabbat():
         if not say_av_harachamim(for_date):
@@ -512,9 +530,17 @@ def build_message(for_date=None):
 
     if rc_state in ["day1", "day2"] or needs_yaale_veyavo(for_date):
         mincha = ["אין תחנון", "יעלה ויבוא"]
+
+    elif not is_special_day:
+        mincha = ["אין תחנון"] if min_tach == "לא" else ["אין שינויים"]
     
     else:
-        mincha = ["אין תחנון"] if min_tach == "לא" else ["אין שינויים"]
+        mincha = ["אין שינויים"]    
+    
+    # ===== צדקתך =====
+    if is_shabbat():
+        if not say_tzidkatcha(for_date):
+            mincha.append("אין צדקתך")                          
 
     arvit = []
 
