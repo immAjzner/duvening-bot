@@ -862,7 +862,7 @@ def needs_yaale_veyavo(for_date=None):
 
 def hallel_shacharit_line(for_date=None):
     for_date = resolve_gregorian(for_date)
-    _, m, d = hebrew_triple(for_date)
+    y, m, d = hebrew_triple(for_date)
     rc = get_rosh_chodesh_state(for_date)
     ch = is_chanukah(m, d)
 
