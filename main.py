@@ -2,6 +2,8 @@ import requests
 import os
 import json
 import base64
+import html
+import re
 from datetime import datetime, date, timedelta
 from zoneinfo import ZoneInfo
 from convertdate import hebrew
@@ -24,11 +26,26 @@ TZ = ZoneInfo("Asia/Jerusalem")
 YESHIVA_PLACE_ID = os.environ.get("YESHIVA_PLACE_ID", "173")
 YESHIVA_CALAJ_CACHE_VERSION = os.environ.get("YESHIVA_CALAJ_CACHE_VERSION", "21")
 
-YI_NAME_SOF_ZMAN_SHMA_GRA = 'סוף זמן קריאת שמע לגר"א'
-YI_NAME_SHKIA = "שקיעה"
-YI_NAME_TZEIT = "צאת הכוכבים"
-YI_NAME_KNISAT_SHABBAT = "כניסת שבת"
-YI_NAME_TSET_SHABBAT = "צאת שבת"
+# כותרות כמו בדפדפן — בלי זה calaj לעיתים מחזיר HTML/403 וה־JSON לא נטען
+YESHIVA_HTTP_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+    ),
+    "Accept": "application/json, text/javascript, */*;q=0.01",
+    "Accept-Language": "he-IL,he;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Referer": "https://www.yeshiva.org.il/calendar/timesday",
+}
+
+# שמות כפי שמופיעים ב־JSON ובגרסת ה־HTML (קיצורים שונים)
+YI_NAMES_SOF_ZMAN_SHMA_GRA = (
+    'סוף זמן קריאת שמע לגר"א',
+    'סוף זמן ק"ש לגר"א',
+)
+YI_NAMES_SHKIA = ("שקיעה",)
+YI_NAMES_TZEIT = ("צאת הכוכבים",)
+YI_NAMES_KNISAT_SHABBAT = ("כניסת שבת",)
+YI_NAMES_TSET_SHABBAT = ("צאת שבת", "יציאת שבת")
 
 HEBREW_MONTH_NAMES = (
     "",
@@ -725,20 +742,26 @@ def arvit_hallel_leil_pesach_lines(for_date=None):
 
 
 # ===== ZMANIM (yeshiva.org.il calaj) =====
+_YI_PAIR_RE = re.compile(
+    r"<span[^>]*\bclass\s*=\s*['\"]?(timesName)['\"]?[^>]*>(.*?)</span>\s*"
+    r"<span[^>]*\bclass\s*=\s*['\"]?(timesVal)['\"]?[^>]*>(.*?)</span>",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
 def _normalize_hhmm(value):
-    """H:MM או HH:MM מהאתר → HH:MM."""
     if not value or not isinstance(value, str):
-        return "—"
+        return None
     value = value.strip()
     if not value:
-        return "—"
+        return None
     parts = value.split(":")
     if len(parts) != 2:
-        return "—"
+        return None
     try:
         h, m = int(parts[0]), int(parts[1])
     except ValueError:
-        return "—"
+        return None
     return f"{h:02d}:{m:02d}"
 
 
@@ -758,6 +781,78 @@ def _yeshiva_calaj_x(place_id, year, month, day, lang="heb", op_tail="d"):
     )
 
 
+def _yeshiva_strip_html_fragment(frag):
+    if not frag:
+        return ""
+    t = re.sub(r"<[^>]+>", " ", frag)
+    return html.unescape(t)
+
+
+def _norm_zman_title(s):
+    s = _yeshiva_strip_html_fragment(s)
+    s = re.sub(r"\s+", " ", s).strip()
+    s = s.replace("״", '"').replace("\u201c", '"').replace("\u201d", '"')
+    return s
+
+
+def _yeshiva_extract_time_pairs(html_fragment):
+    rows = []
+    for m in _YI_PAIR_RE.finditer(html_fragment or ""):
+        name = _norm_zman_title(m.group(2))
+        val = _norm_zman_title(m.group(4))
+        if name and val:
+            rows.append({"name": name, "value": val})
+    return rows
+
+
+def _yeshiva_html_to_payload(page_html):
+    low = page_html.lower()
+    idx = low.find("class=shabat")
+    if idx == -1:
+        idx = low.find("class='shabat'")
+    if idx == -1:
+        idx = low.find('class="shabat"')
+    main = page_html if idx < 0 else page_html[:idx]
+    shabat_html = "" if idx < 0 else page_html[idx:]
+    place_name = ""
+    pm = re.search(
+        r"<div\s+class\s*=\s*DayPlace\s*>([^<]*)</div>",
+        page_html,
+        re.I,
+    )
+    if pm:
+        place_name = _norm_zman_title(pm.group(1))
+    return {
+        "times": _yeshiva_extract_time_pairs(main),
+        "shabat": {"times": _yeshiva_extract_time_pairs(shabat_html)},
+        "place": {"name": place_name} if place_name else {},
+    }
+
+
+def _yeshiva_parse_calaj_body(raw_text):
+    t = raw_text.lstrip("\ufeff").strip()
+    if t.startswith("{") or t.startswith("["):
+        try:
+            data = json.loads(t)
+            if isinstance(data, dict) and isinstance(data.get("day"), dict):
+                inner = data["day"]
+                if "times" in inner or "shabat" in inner:
+                    return inner
+            return data if isinstance(data, dict) else {}
+        except json.JSONDecodeError:
+            pass
+    return _yeshiva_html_to_payload(t)
+
+
+def _yeshiva_payload_has_times(payload):
+    if not payload:
+        return False
+    if payload.get("times"):
+        return True
+    st = (payload.get("shabat") or {}).get("times")
+    return bool(st)
+
+
 _yeshiva_day_cache = {}
 
 
@@ -774,47 +869,60 @@ def yeshiva_day_payload(for_date=None):
         f"?cache_version={YESHIVA_CALAJ_CACHE_VERSION}&v=1&op=d&pl={pl}"
         f"&yr={y}&mn={m}&dy={d}&sv=false&lng=heb&x={x}"
     )
-    data = {}
+    result = {}
     try:
-        r = requests.get(url, timeout=20)
+        r = requests.get(url, timeout=20, headers=YESHIVA_HTTP_HEADERS)
         r.raise_for_status()
         if r.text.strip():
-            data = r.json()
+            data = _yeshiva_parse_calaj_body(r.text)
+            result = data if isinstance(data, dict) else {}
     except (requests.RequestException, ValueError, TypeError):
         pass
-    _yeshiva_day_cache[key] = data if isinstance(data, dict) else {}
-    return _yeshiva_day_cache[key]
+    if _yeshiva_payload_has_times(result):
+        _yeshiva_day_cache[key] = result
+    return result
 
 
-def _yeshiva_time_by_name(payload, zman_name):
+def _yeshiva_time_by_names(payload, accepted_names):
+    want = {_norm_zman_title(n) for n in accepted_names}
     for row in payload.get("times") or []:
-        if row.get("name") == zman_name:
-            return _normalize_hhmm(row.get("value"))
-    return "—"
+        if _norm_zman_title(row.get("name", "")) in want:
+            t = _normalize_hhmm(row.get("value"))
+            if t:
+                return t
+    return None
 
 
-def _yeshiva_shabat_time_by_name(payload, zman_name):
+def _yeshiva_shabat_time_by_names(payload, accepted_names):
+    want = {_norm_zman_title(n) for n in accepted_names}
     sh = payload.get("shabat") or {}
     for row in sh.get("times") or []:
-        if row.get("name") == zman_name:
-            return _normalize_hhmm(row.get("value"))
-    return "—"
+        if _norm_zman_title(row.get("name", "")) in want:
+            t = _normalize_hhmm(row.get("value"))
+            if t:
+                return t
+    return None
 
 
 def yeshiva_zmanim_lines(for_date=None):
     p = yeshiva_day_payload(for_date)
+
+    def line(label, names):
+        t = _yeshiva_time_by_names(p, names)
+        return f"{label}{t}" if t else ""
+
     return (
-        f"סוף זמן ק״ש: {_yeshiva_time_by_name(p, YI_NAME_SOF_ZMAN_SHMA_GRA)}",
-        f"שקיעה: {_yeshiva_time_by_name(p, YI_NAME_SHKIA)}",
-        f"צאת הכוכבים: {_yeshiva_time_by_name(p, YI_NAME_TZEIT)}",
+        line("סוף זמן ק״ש: ", YI_NAMES_SOF_ZMAN_SHMA_GRA),
+        line("שקיעה: ", YI_NAMES_SHKIA),
+        line("צאת הכוכבים: ", YI_NAMES_TZEIT),
     )
 
 
 def yeshiva_shabbat_candles_havdalah_hhmm(for_date=None):
     p = yeshiva_day_payload(for_date)
     return (
-        _yeshiva_shabat_time_by_name(p, YI_NAME_KNISAT_SHABBAT),
-        _yeshiva_shabat_time_by_name(p, YI_NAME_TSET_SHABBAT),
+        _yeshiva_shabat_time_by_names(p, YI_NAMES_KNISAT_SHABBAT),
+        _yeshiva_shabat_time_by_names(p, YI_NAMES_TSET_SHABBAT),
     )
 
 
@@ -939,38 +1047,30 @@ def build_message(for_date=None):
     candles_hhmm, havdalah_hhmm = yeshiva_shabbat_candles_havdalah_hhmm(for_date)
 
     knisat_shabbat_block = ""
-    if for_date.weekday() == 4:
-        knisat_shabbat_block = (
-            "\n\n    "
-            + format_section("כניסת שבת", [candles_hhmm])
-        )
+    if for_date.weekday() == 4 and candles_hhmm:
+        knisat_shabbat_block = "\n\n" + format_section("כניסת שבת", [candles_hhmm])
 
     motzei_shabbat_block = ""
-    if is_shabbat_date(for_date):
-        motzei_shabbat_block = (
-            "\n\n    "
-            + format_section("צאת השבת", [havdalah_hhmm])
-        )
+    if is_shabbat_date(for_date) and havdalah_hhmm:
+        motzei_shabbat_block = "\n\n" + format_section("צאת השבת", [havdalah_hhmm])
 
-    msg = f"""{header} 📅
-
-    {format_section("שחרית 🌅", shacharit)}
-    {z_sof}
-    """
+    msg = f"{header} 📅\n\n{format_section('שחרית 🌅', shacharit)}"
+    if z_sof:
+        msg += f"\n{z_sof}"
 
     if has_musaf:
         msg += "\n\nמוסף 🕍"
         if musaf_extras:
             msg += "\n" + "\n".join(musaf_extras)
 
-    msg += f"""{knisat_shabbat_block}
+    msg += f"{knisat_shabbat_block}\n\n{format_section('מנחה 🌇', mincha)}"
+    if z_shkiah:
+        msg += f"\n{z_shkiah}"
 
-    {format_section("מנחה 🌇", mincha)}
-    {z_shkiah}
-
-    {format_section("ערבית 🌙", arvit)}
-    {z_tzeit}{motzei_shabbat_block}
-    """
+    msg += f"\n\n{format_section('ערבית 🌙', arvit)}"
+    if z_tzeit:
+        msg += f"\n{z_tzeit}"
+    msg += motzei_shabbat_block
 
     greeting = get_greeting(y, m, d, for_date)
     if greeting:
