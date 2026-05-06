@@ -1060,16 +1060,19 @@ def build_message(for_date=None):
 
     msg = f"{header} 📅\n\n{format_section('שחרית 🌅', shacharit)}"
     if z_sof:
-        msg += f"\n{z_sof}"
+        msg += f"\n\n{z_sof}"
 
     if has_musaf:
         msg += "\n\n" + format_section("מוסף 🕍", musaf_extras)
 
     msg += f"{knisat_shabbat_block}\n\n{format_section('מנחה 🌇', mincha)}"
+    mincha_zmanim = []
     if z_shkiah:
-        msg += f"\n{z_shkiah}"
+        mincha_zmanim.append(z_shkiah)
     if z_tzeit:
-        msg += f"\n{z_tzeit}"
+        mincha_zmanim.append(z_tzeit)
+    if mincha_zmanim:
+        msg += "\n\n" + "\n".join(mincha_zmanim)
 
     msg += f"\n\n{format_section('ערבית 🌙', arvit)}"
     msg += motzei_shabbat_block
