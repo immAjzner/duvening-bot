@@ -70,7 +70,7 @@ def save_last_run(today_str, sha):
 def should_send_now():
     now = datetime.now(TZ)
 
-    if not (6 <= now.hour <= 8):
+    if not (5 <= now.hour <= 8):
         return False
 
     today_str = now.date().isoformat()
@@ -196,6 +196,9 @@ def is_yomtov(m, d):
 
 def is_shabbat():
     return datetime.now(TZ).weekday() == 5
+
+def is_shabbat_date(for_date):
+    return for_date.weekday() == 5
 
 def is_yomtov_today():
     today = date.today()
@@ -430,6 +433,24 @@ def get_day_name(m, d):
 
     return None
 
+def is_chanukah(m, d):
+    return (m == 9 and d >= 25) or (m == 10 and d <= 2)
+
+def is_purim_day(m, d):
+    return (m == 12 and d == 14) or (m == 13 and d == 14)
+
+def is_chol_hamoed(m, d):
+    return (m == 1 and 17 <= d <= 20) or (m == 7 and 17 <= d <= 20)
+
+def chol_sukkot_musaf_u_bayom(m, d):
+    if m != 7 or not (16 <= d <= 20):
+        return None
+    day = ["השני", "השלישי", "הרביעי", "החמישי", "השישי"][d - 16]
+    return f"וביום {day}"
+
+def is_hoshana_raba(m, d):
+    return m == 7 and d == 21
+
 def get_greeting(m, d):
     wd = datetime.now(TZ).weekday()
 
@@ -556,6 +577,9 @@ def build_message(for_date=None):
         if not say_av_harachamim(for_date):
             shacharit.append("אין אב הרחמים")
 
+    if is_chanukah(m, d) or is_purim_day(m, d):
+        shacharit.append("על הנסים")
+
     if rc_state in ["day1", "day2"] or needs_yaale_veyavo(for_date):
         mincha = ["אין תחנון", "יעלה ויבוא"]
 
@@ -568,7 +592,10 @@ def build_message(for_date=None):
     # ===== צדקתך =====
     if is_shabbat():
         if not say_tzidkatcha(for_date):
-            mincha.append("אין צדקתך")                          
+            mincha.append("אין צדקתך")
+
+    if is_chanukah(m, d) or is_purim_day(m, d):
+        mincha.append("על הנסים")
 
     arvit = []
 
@@ -586,17 +613,34 @@ def build_message(for_date=None):
     
     if omer:
         arvit.append(f"ספירת העומר: היום {omer+1} לעומר")
-    
+
+    if is_chanukah(m, d) or is_purim_day(m, d):
+        arvit.append("על הנסים")
+
     if not arvit:
         arvit = ["אין שינויים"]
 
-    musaf = []
+    musaf_extras = []
+    has_musaf = (
+        rc_state in ["day1", "day2"]
+        or is_shabbat_date(for_date)
+        or is_yomtov(m, d)
+        or is_chol_hamoed(m, d)
+        or is_hoshana_raba(m, d)
+    )
 
-    if rc_state in ["day1", "day2"]:
-        musaf.append("מוסף")
-    
-        if is_shabbat():
-            musaf.append("אתה יצרת")
+    if rc_state in ["day1", "day2"] and is_shabbat_date(for_date):
+        musaf_extras.append("אתה יצרת")
+
+    u_bayom = chol_sukkot_musaf_u_bayom(m, d)
+    if u_bayom:
+        musaf_extras.append(u_bayom)
+
+    if is_hoshana_raba(m, d):
+        musaf_extras.append("הושענא רבה")
+
+    if has_musaf and is_chanukah(m, d):
+        musaf_extras.append("על הנסים")
 
     def section(name, items):
         return f"{name}:\n" + "\n".join(items)
@@ -606,11 +650,10 @@ def build_message(for_date=None):
     {section("🌅 שחרית", shacharit)}
     """
 
-    if musaf:
-        if len(musaf) == 1:
-            msg += f"\n\n🕍 {musaf[0]}"
-        else:
-            msg += f"\n\n🕍 מוסף:\n" + "\n".join(musaf)
+    if has_musaf:
+        msg += "\n\n🕍 מוסף"
+        if musaf_extras:
+            msg += "\n" + "\n".join(musaf_extras)
 
     msg += f"""
     
