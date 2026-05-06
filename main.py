@@ -166,22 +166,10 @@ def should_send_now():
     return True
 
 # ===== TELEGRAM =====
-def telegram_rtl_normalize(text):
-    rlm = "\u200f"
-    lines = []
-    for line in (text or "").split("\n"):
-        if not line.strip():
-            lines.append("")
-            continue
-        stripped = line.lstrip("\u200f\u200e")
-        lines.append(rlm + stripped)
-    return "\n".join(lines)
-
-
 def send(chat_id, msg):
     requests.post(f"{BASE_URL}/sendMessage", data={
         "chat_id": chat_id,
-        "text": telegram_rtl_normalize(msg)
+        "text": msg
     })
 
 def broadcast(msg):
