@@ -136,7 +136,7 @@ def get_hebrew_date(for_date=None):
     weekdays = ["שני","שלישי","רביעי","חמישי","שישי","שבת","ראשון"]
 
     wd = datetime.now(TZ).weekday()
-    return f"יום {weekdays[wd]}, {hebrew_number(d)} ב{months[m]} {hebrew_year(y)}"
+    return f"יום {weekdays[wd]}, {hebrew_number(d)} ב{months[m]} ה{hebrew_year(y)}"
 
 # ===== OMER =====
 def calculate_omer(for_date=None):
