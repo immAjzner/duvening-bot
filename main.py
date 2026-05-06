@@ -906,11 +906,10 @@ def _yeshiva_shabat_time_by_names(payload, accepted_names):
 
 def yeshiva_zmanim_lines(for_date=None):
     p = yeshiva_day_payload(for_date)
-    _rlm = "\u200f"
 
     def line(label, names):
         t = _yeshiva_time_by_names(p, names)
-        return f"{label}{_rlm}{t}".rstrip() if t else ""
+        return f"{label}{t}".rstrip() if t else ""
 
     return (
         line("סוף זמן ק״ש: ", YI_NAMES_SOF_ZMAN_SHMA_GRA),
@@ -1070,7 +1069,15 @@ def build_message(for_date=None):
 
     msg += f"\n\n{format_section('ערבית 🌙', arvit)}"
     if z_tzeit:
-        msg += f"\n{z_tzeit}"
+        zt = z_tzeit.strip()
+        for ch in ("\u200f", "\u200e"):
+            zt = zt.replace(ch, "")
+        zt = zt.strip()
+        if ": " in zt:
+            z_title, z_time = zt.split(": ", 1)
+            msg += "\n" + format_section(z_title, [z_time.strip()])
+        else:
+            msg += f"\n{zt}"
     msg += motzei_shabbat_block
 
     greeting = get_greeting(y, m, d, for_date)
