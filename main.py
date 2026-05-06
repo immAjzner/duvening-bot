@@ -906,18 +906,18 @@ def _yeshiva_shabat_time_by_names(payload, accepted_names):
 
 def yeshiva_zmanim_lines(for_date=None):
     p = yeshiva_day_payload(for_date)
-    # RLM (\u200F) בסוף השורה — מונע מהספרות "להידחק" לקצה השמאלי
-    # בטלגרם כשפסקה אחרת באותו בלוק רחבה יותר
-    rlm = "\u200f"
+    # NBSP (\u00A0) בין הנקודתיים לשעה — מונע מטלגרם למתוח את הרווח
+    # ביישור־לרוחב כששורה אחרת בפסקה ארוכה יותר (למשל ספירת העומר)
+    nbsp = "\u00a0"
 
     def line(label, names):
         t = _yeshiva_time_by_names(p, names)
-        return f"{label}{t}{rlm}".rstrip() if t else ""
+        return f"{label}:{nbsp}{t}" if t else ""
 
     return (
-        line("סוף זמן ק״ש: ", YI_NAMES_SOF_ZMAN_SHMA_GRA),
-        line("שקיעה: ", YI_NAMES_SHKIA),
-        line("צאת הכוכבים: ", YI_NAMES_TZEIT),
+        line("סוף זמן ק״ש", YI_NAMES_SOF_ZMAN_SHMA_GRA),
+        line("שקיעה", YI_NAMES_SHKIA),
+        line("צאת הכוכבים", YI_NAMES_TZEIT),
     )
 
 
