@@ -61,6 +61,7 @@ HEBREW_MONTH_NAMES = (
     "טבת",
     "שבט",
     "אדר",
+    "אדר ב׳",
 )
 HEBREW_WEEKDAY_NAMES = (
     "שני",
@@ -237,13 +238,23 @@ def say_tzidkatcha(for_date=None):
 
     return sh != "לא"
 
+def hebrew_month_name(y, m):
+    if m == 12 and is_hebrew_leap_year(y):
+        return "אדר א׳"
+    return HEBREW_MONTH_NAMES[m]
+
+
 def is_shabbat_mevarchim(for_date=None):
     for_date = resolve_gregorian(for_date)
 
-    if not is_shabbat():
+    if not is_shabbat_date(for_date):
         return False
 
-    for i in range(1, 7):
+    y, m, _ = hebrew_triple(for_date)
+    if m == 6:
+        return False
+
+    for i in range(1, 8):
         future = for_date + timedelta(days=i)
         _, _, d = hebrew_triple(future)
 
@@ -251,6 +262,45 @@ def is_shabbat_mevarchim(for_date=None):
             return True
 
     return False
+
+
+def upcoming_rosh_chodesh_dates_after_shabbat(shabbat_date):
+    rc_dates = []
+    for i in range(1, 8):
+        dte = shabbat_date + timedelta(days=i)
+        _, _, hd = hebrew_triple(dte)
+        if hd in (1, 30):
+            rc_dates.append(dte)
+    return rc_dates
+
+
+def shabbat_mevarchim_line(for_date=None):
+    for_date = resolve_gregorian(for_date)
+    if for_date.weekday() != 4:
+        return None
+
+    shabbat_date = for_date + timedelta(days=1)
+    if not is_shabbat_mevarchim(shabbat_date):
+        return None
+
+    rc_dates = upcoming_rosh_chodesh_dates_after_shabbat(shabbat_date)
+    if not rc_dates:
+        return None
+
+    month_date = next(
+        (dte for dte in rc_dates if hebrew_triple(dte)[2] == 1),
+        rc_dates[-1],
+    )
+    rc_year, rc_month, _ = hebrew_triple(month_date)
+    month_name = hebrew_month_name(rc_year, rc_month)
+
+    weekdays = [HEBREW_WEEKDAY_NAMES[dte.weekday()] for dte in rc_dates]
+    if len(weekdays) == 1:
+        days_text = f"ביום {weekdays[0]}"
+    else:
+        days_text = "בימים " + "-".join(weekdays)
+
+    return f"שבת מברכים - ר״ח {month_name} יהיה {days_text}"
 
 # ===== HOLIDAYS =====
 def is_rosh_hashana(m, d):
@@ -1076,6 +1126,10 @@ def build_message(for_date=None):
 
     msg += f"\n\n{format_section('ערבית 🌙', arvit)}"
     msg += motzei_shabbat_block
+
+    mevarchim = shabbat_mevarchim_line(for_date)
+    if mevarchim:
+        msg += f"\n\n{mevarchim}"
 
     greeting = get_greeting(y, m, d, for_date)
     if greeting:
