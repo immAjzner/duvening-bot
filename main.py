@@ -20,11 +20,71 @@ MY_CHAT_ID = "5474184664"
 
 TZ = ZoneInfo("Asia/Jerusalem")
 
+# מיקום ושדה צאת כוכבים ב־Hebcal (ברירת מחדל tzeit85deg)
+ZMANIM_LATITUDE = 32.3328
+ZMANIM_LONGITUDE = 34.8600
+HEBCAL_TZEIT_FIELD = os.environ.get("HEBCAL_TZEIT_FIELD", "tzeit85deg")
+
+HEBREW_MONTH_NAMES = (
+    "",
+    "ניסן",
+    "אייר",
+    "סיון",
+    "תמוז",
+    "אב",
+    "אלול",
+    "תשרי",
+    "חשוון",
+    "כסלו",
+    "טבת",
+    "שבט",
+    "אדר",
+)
+HEBREW_WEEKDAY_NAMES = (
+    "שני",
+    "שלישי",
+    "רביעי",
+    "חמישי",
+    "שישי",
+    "שבת",
+    "ראשון",
+)
+FOUR_PARSHIYOS = frozenset({"Shekalim", "Zachor", "Parah", "Hachodesh"})
+RC_FULL_DAYS = frozenset({"day1", "day2"})
+EXTRA_DIGEST_MAX_OFFSET = 4  # היום + עד 4 ימים קדימה בהודעה אחת
+SUKKOT_MUSAF_U_BAYOM_DAYS = ("השני", "השלישי", "הרביעי", "החמישי", "השישי")
+
+GITHUB_AUTH_HEADER = {"Authorization": f"Bearer {GITHUB_TOKEN}"}
+
+
+def resolve_gregorian(for_date=None):
+    return for_date if for_date is not None else date.today()
+
+
+def hebrew_triple(for_date=None):
+    g = resolve_gregorian(for_date)
+    return hebrew.from_gregorian(g.year, g.month, g.day)
+
+
+def is_hebrew_leap_year(y):
+    leap_fn = getattr(hebrew, "leap", None)
+    if leap_fn is not None:
+        return bool(leap_fn(y))
+    return ((7 * y + 1) % 19) < 7
+
+
+def is_purim_day(y, m, d):
+    if d != 14:
+        return False
+    if is_hebrew_leap_year(y):
+        return m == 13
+    return m == 12
+
+
 # ===== GITHUB =====
 def get_file(path):
     url = f"https://api.github.com/repos/{REPO}/contents/{path}"
-    headers = {"Authorization": f"Bearer {GITHUB_TOKEN}"}
-    res = requests.get(url, headers=headers)
+    res = requests.get(url, headers=GITHUB_AUTH_HEADER)
 
     if res.status_code != 200:
         return None, None
@@ -35,7 +95,6 @@ def get_file(path):
 
 def save_file(path, content_obj, sha, message):
     url = f"https://api.github.com/repos/{REPO}/contents/{path}"
-    headers = {"Authorization": f"Bearer {GITHUB_TOKEN}"}
 
     content = json.dumps(content_obj, ensure_ascii=False, indent=2)
     encoded = base64.b64encode(content.encode()).decode()
@@ -46,7 +105,7 @@ def save_file(path, content_obj, sha, message):
         "sha": sha
     }
 
-    requests.put(url, headers=headers, json=data)
+    requests.put(url, headers=GITHUB_AUTH_HEADER, json=data)
 
 # ===== USERS =====
 def get_users():
@@ -55,9 +114,11 @@ def get_users():
 
 def add_user(chat_id):
     users, sha = get_users()
-    if chat_id not in users:
-        users.append(chat_id)
-        save_file(USERS_FILE, users, sha, "add user")
+    if chat_id in users:
+        return False
+    users.append(chat_id)
+    save_file(USERS_FILE, users, sha, "add user")
+    return True
 
 # ===== LAST RUN =====
 def get_last_run():
@@ -127,23 +188,17 @@ def hebrew_year(y):
 
 # ===== DATE =====
 def get_hebrew_date(for_date=None):
-    if not for_date:
-        for_date = date.today()
-
-    y, m, d = hebrew.from_gregorian(for_date.year, for_date.month, for_date.day)
-
-    months = ["","ניסן","אייר","סיון","תמוז","אב","אלול","תשרי","חשוון","כסלו","טבת","שבט","אדר"]
-    weekdays = ["שני","שלישי","רביעי","חמישי","שישי","שבת","ראשון"]
-
-    wd = datetime.now(TZ).weekday()
-    return f"יום {weekdays[wd]}, {hebrew_number(d)} ב{months[m]} ה{hebrew_year(y)}"
+    for_date = resolve_gregorian(for_date)
+    y, m, d = hebrew_triple(for_date)
+    wd = for_date.weekday()
+    return (
+        f"יום {HEBREW_WEEKDAY_NAMES[wd]}, {hebrew_number(d)} "
+        f"ב{HEBREW_MONTH_NAMES[m]} ה{hebrew_year(y)}"
+    )
 
 # ===== OMER =====
 def calculate_omer(for_date=None):
-    if not for_date:
-        for_date = date.today()
-
-    y, m, d = hebrew.from_gregorian(for_date.year, for_date.month, for_date.day)
+    _, m, d = hebrew_triple(for_date)
 
     if m == 1 and d >= 16: return d - 15
     if m == 2: return 15 + d
@@ -152,34 +207,23 @@ def calculate_omer(for_date=None):
     return None
 
 def say_tzidkatcha(for_date=None):
-    if not for_date:
-        for_date = date.today()
-
-    # רלוונטי רק בשבת
-    if datetime.now(TZ).weekday() != 5:
+    for_date = resolve_gregorian(for_date)
+    if not is_shabbat_date(for_date):
         return True
 
-    # נבדוק אם ביום זה (אם היה חול) היו אומרים תחנון
     sh, _ = calculate_tachanun(for_date)
 
     return sh != "לא"
 
 def is_shabbat_mevarchim(for_date=None):
-    if not for_date:
-        for_date = date.today()
+    for_date = resolve_gregorian(for_date)
 
-    # רק שבת
-    if datetime.now(TZ).weekday() != 5:
+    if not is_shabbat():
         return False
 
-    # תאריך עברי היום
-    hdate = dates.GregorianDate(for_date.year, for_date.month, for_date.day).to_heb()
-
-    # יום שבת הבא (ליתר ביטחון — pyluach עובד לפי תאריך)
-    # נבדוק אם בתוך השבוע הקרוב יש ראש חודש
     for i in range(1, 7):
         future = for_date + timedelta(days=i)
-        y, m, d = hebrew.from_gregorian(future.year, future.month, future.day)
+        _, _, d = hebrew_triple(future)
 
         if d == 1:
             return True
@@ -187,11 +231,97 @@ def is_shabbat_mevarchim(for_date=None):
     return False
 
 # ===== HOLIDAYS =====
+def is_rosh_hashana(m, d):
+    return m == 7 and d in (1, 2)
+
+
+def is_yom_kippur(m, d):
+    return m == 7 and d == 10
+
+
+def is_erev_yom_kippur(m, d):
+    return m == 7 and d == 9
+
+
+def is_pesach_first_day(m, d):
+    return m == 1 and d == 15
+
+
+def is_pesach_seventh_day(m, d):
+    return m == 1 and d == 21
+
+
+def is_pesach_yom_tov(m, d):
+    return is_pesach_first_day(m, d) or is_pesach_seventh_day(m, d)
+
+
+def is_pesach_from_first_day(m, d):
+    return m == 1 and d >= 15
+
+
+def is_pesach_hallel_dilug_range(m, d):
+    return m == 1 and 16 <= d <= 20
+
+
+def is_erev_pesach_seder(m, d):
+    return m == 1 and d == 14
+
+
+def is_shavuot(m, d):
+    return m == 3 and d == 6
+
+
+def is_sivan_shabbat_before_shavuot(m, d):
+    return m == 3 and d in (4, 5)
+
+
+def is_erev_shavuot(m, d):
+    return m == 3 and d == 5
+
+
+def is_sukkot_yom_tov(m, d):
+    return m == 7 and d in (15, 16, 22)
+
+
+def is_sukkot_from_first_day(m, d):
+    return m == 7 and d >= 15
+
+
+def is_erev_sukkot(m, d):
+    return m == 7 and d == 14
+
+
+def is_sukkot_days_16_to_20(m, d):
+    return m == 7 and 16 <= d <= 20
+
+
+def is_sukkot_hallel_through_shemini(m, d):
+    return m == 7 and 15 <= d <= 22
+
+
+def is_yom_haatzmaut(m, d):
+    return m == 2 and d == 5
+
+
+def is_yom_yerushalayim(m, d):
+    return m == 2 and d == 28
+
+
+def is_modern_israel_festivals(m, d):
+    return is_yom_haatzmaut(m, d) or is_yom_yerushalayim(m, d)
+
+
+def is_moed_window_vihi_pesach_or_sukkot(m, d):
+    return is_pesach_hallel_dilug_range(m, d) or is_sukkot_days_16_to_20(m, d)
+
+
 def is_yomtov(m, d):
     return (
-        (m == 1 and d in [15,16,21,22]) or
-        (m == 3 and d in [6,7]) or
-        (m == 7 and d in [1,2,10,15,16,22,23])
+        is_rosh_hashana(m, d)
+        or is_yom_kippur(m, d)
+        or is_pesach_yom_tov(m, d)
+        or is_shavuot(m, d)
+        or is_sukkot_yom_tov(m, d)
     )
 
 def is_shabbat():
@@ -201,24 +331,56 @@ def is_shabbat_date(for_date):
     return for_date.weekday() == 5
 
 def is_yomtov_today():
-    today = date.today()
-    y,m,d = hebrew.from_gregorian(today.year, today.month, today.day)
-    return is_yomtov(m,d)
+    return is_yomtov(*hebrew_triple(date.today()))
+
+
+def day_is_shabbat_or_yomtov(gd):
+    return is_shabbat_date(gd) or is_yomtov(*hebrew_triple(gd))
+
+
+def need_multi_day_digest(today):
+    wd = datetime.now(TZ).weekday()
+    if wd == 4:
+        return True
+    return day_is_shabbat_or_yomtov(today + timedelta(days=1))
+
+
+def multi_day_digest_dates(today):
+    if not need_multi_day_digest(today):
+        return []
+    out = []
+    for k in range(1, EXTRA_DIGEST_MAX_OFFSET + 1):
+        d = today + timedelta(days=k)
+        if day_is_shabbat_or_yomtov(d):
+            out.append(d)
+    return out
+
+
+def heading_for_multi_day_section(today, d):
+    n = (d - today).days
+    if n == 1:
+        return "📅 גם מחר"
+    if n == 2:
+        return "📅 גם בעוד יומיים"
+    if n == 3:
+        return "📅 גם בעוד שלושה ימים"
+    if n == 4:
+        return "📅 גם בעוד ארבעה ימים"
+    return f"📅 בעוד {n} ימים"
+
 
 def say_av_harachamim(for_date=None):
-    if not for_date:
-        for_date = date.today()
+    for_date = resolve_gregorian(for_date)
 
-    # רלוונטי רק בשבת
-    if datetime.now(TZ).weekday() != 5:
+    if not is_shabbat_date(for_date):
         return False
 
-    y, m, d = hebrew.from_gregorian(for_date.year, for_date.month, for_date.day)
+    y, m, d = hebrew_triple(for_date)
 
     # ========= חריגים — כן אומרים =========
 
     # שבת שלפני שבועות
-    if m == 3 and d in [4, 5]:
+    if is_sivan_shabbat_before_shavuot(m, d):
         return True
 
     # שבת שלפני תשעה באב
@@ -245,12 +407,10 @@ def say_av_harachamim(for_date=None):
 
     # ========= ימים מיוחדים =========
 
-    # חנוכה
-    if (m == 9 and d >= 25) or (m == 10 and d <= 2):
+    if is_chanukah(m, d):
         return False
 
-    # פורים
-    if m == 12 and d == 14:
+    if is_purim_day(y, m, d):
         return False
 
     # ט"ו בשבט
@@ -263,80 +423,56 @@ def say_av_harachamim(for_date=None):
 
     # ערב חג (פסח/שבועות/ר"ה)
     tomorrow = for_date + timedelta(days=1)
-    y3, m3, d3 = hebrew.from_gregorian(tomorrow.year, tomorrow.month, tomorrow.day)
-
-    if is_yomtov(m3, d3):
+    if is_yomtov(*hebrew_triple(tomorrow)):
         return False
 
     # ========= ברירת מחדל =========
     return True
 
 def is_four_parshiyot(for_date=None):
-    if not for_date:
-        for_date = date.today()
+    for_date = resolve_gregorian(for_date)
 
-    # המרה ללוח עברי של pyluach
     hdate = dates.GregorianDate(for_date.year, for_date.month, for_date.day).to_heb()
 
-    # רק שבת
-    if datetime.now(TZ).weekday() != 5:
+    if not is_shabbat_date(for_date):
         return False
 
     parsha = parshios.getparsha(hdate)
 
-    # ארבע פרשיות
-    return parsha in [
-        "Shekalim",
-        "Zachor",
-        "Parah",
-        "Hachodesh"
-    ]
-
-def is_erev_special():
-    tomorrow = date.today() + timedelta(days=1)
-    wd = datetime.now(TZ).weekday()
-    y,m,d = hebrew.from_gregorian(tomorrow.year, tomorrow.month, tomorrow.day)
-
-    return wd == 4 or is_yomtov(m,d)
+    return parsha in FOUR_PARSHIYOS
 
 # ===== למנצח =====
-def has_lamenatzeach(m, d):
+def has_lamenatzeach(y, m, d):
     if d == 1 or d == 30:
         return False
 
-    if m == 7 and d == 9:
+    if is_erev_yom_kippur(m, d):
         return False
 
-    if m == 1 and d == 14:
+    if is_erev_pesach_seder(m, d):
         return False
-    if m == 3 and d == 5:
+    if is_erev_shavuot(m, d):
         return False
-    if m == 7 and d == 14:
+    if is_erev_sukkot(m, d):
         return False
-    if m == 7 and d == 21:
-        return False
-
-    if (m == 9 and d >= 25) or (m == 10 and d <= 2):
+    if is_hoshana_raba(m, d):
         return False
 
-    if m == 12 and d == 14:
+    if is_chanukah(m, d):
         return False
 
-    if m == 13 and d == 14:
+    if is_purim_day(y, m, d):
         return False
 
-    if m == 1 and 16 <= d <= 20:
+    if is_pesach_hallel_dilug_range(m, d):
         return False
-    if m == 7 and 16 <= d <= 20:
-        return False
-
-    if (m == 1 and d == 22) or (m == 3 and d == 7) or (m == 7 and d == 23):
+    if is_sukkot_days_16_to_20(m, d):
         return False
 
-    if m == 2 and d == 5:
+    if is_pesach_seventh_day(m, d) or is_shavuot(m, d):
         return False
 
-    if m == 2 and d == 28:
+    if is_modern_israel_festivals(m, d):
         return False
 
     if m == 5 and d == 9:
@@ -352,17 +488,16 @@ def has_lamenatzeach(m, d):
 
 # ===== TACHANUN =====
 def calculate_tachanun(for_date=None):
-    if not for_date:
-        for_date = date.today()
+    for_date = resolve_gregorian(for_date)
 
     wd = datetime.now(TZ).weekday()
-    y,m,d = hebrew.from_gregorian(for_date.year, for_date.month, for_date.day)
+    _, m, d = hebrew_triple(for_date)
 
     if d == 1 or d == 30:
         return "לא", "לא"
 
     tomorrow = for_date + timedelta(days=1)
-    y2,m2,d2 = hebrew.from_gregorian(tomorrow.year, tomorrow.month, tomorrow.day)
+    _, m2, d2 = hebrew_triple(tomorrow)
 
     if m == 1 or m == 3:
         return "לא", "לא"
@@ -379,56 +514,50 @@ def calculate_tachanun(for_date=None):
     return "רגיל", "רגיל"
 
 def say_vihi_noam(for_date=None):
-    if not for_date:
-        for_date = date.today()
+    for_date = resolve_gregorian(for_date)
 
-    # רק מוצאי שבת
-    if datetime.now(TZ).weekday() != 6:
+    if for_date.weekday() != 6:
         return True
 
-    # אם היום עצמו (מוצ"ש) כבר יום טוב — לא אומרים
-    y, m, d = hebrew.from_gregorian(for_date.year, for_date.month, for_date.day)
+    _, m, d = hebrew_triple(for_date)
     if is_yomtov(m, d):
         return False
 
-    # בדיקה קדימה לשבוע הקרוב
     for i in range(1, 7):
         future = for_date + timedelta(days=i)
-        y2, m2, d2 = hebrew.from_gregorian(future.year, future.month, future.day)
+        _, m2, d2 = hebrew_triple(future)
 
-        # יום טוב
         if is_yomtov(m2, d2):
             return False
 
-        # חול המועד
-        if (m2 == 1 and 16 <= d2 <= 20) or (m2 == 7 and 16 <= d2 <= 20):
+        if is_intermediate_moed_window_vihi(m2, d2):
             return False
 
     return True
 
-def get_day_name(m, d):
+def get_day_name(y, m, d):
     if m == 2 and d == 18:
         return "ל״ג בעומר"
 
-    if m == 12 and d == 14:
+    if is_purim_day(y, m, d):
         return "פורים"
 
-    if (m == 9 and d >= 25) or (m == 10 and d <= 2):
+    if is_chanukah(m, d):
         return "חנוכה"
 
-    if m == 7 and d in [1,2]:
+    if is_rosh_hashana(m, d):
         return "ראש השנה"
 
-    if m == 7 and d == 10:
+    if is_yom_kippur(m, d):
         return "יום כיפור"
 
-    if m == 1 and d >= 15:
+    if is_pesach_from_first_day(m, d):
         return "פסח"
 
-    if m == 3 and d == 6:
+    if is_shavuot(m, d):
         return "שבועות"
 
-    if m == 7 and d >= 15:
+    if is_sukkot_from_first_day(m, d):
         return "סוכות"
 
     return None
@@ -436,122 +565,255 @@ def get_day_name(m, d):
 def is_chanukah(m, d):
     return (m == 9 and d >= 25) or (m == 10 and d <= 2)
 
-def is_purim_day(m, d):
-    return (m == 12 and d == 14) or (m == 13 and d == 14)
+
+def needs_al_hanissim(y, m, d):
+    return is_chanukah(m, d) or is_purim_day(y, m, d)
+
+
+def is_chol_hamoed_pesach(m, d):
+    return m == 1 and 17 <= d <= 20
+
+
+def is_chol_hamoed_sukkot(m, d):
+    return m == 7 and 17 <= d <= 20
+
 
 def is_chol_hamoed(m, d):
-    return (m == 1 and 17 <= d <= 20) or (m == 7 and 17 <= d <= 20)
+    return is_chol_hamoed_pesach(m, d) or is_chol_hamoed_sukkot(m, d)
+
 
 def chol_sukkot_musaf_u_bayom(m, d):
-    if m != 7 or not (16 <= d <= 20):
+    if not is_sukkot_days_16_to_20(m, d):
         return None
-    day = ["השני", "השלישי", "הרביעי", "החמישי", "השישי"][d - 16]
+    day = SUKKOT_MUSAF_U_BAYOM_DAYS[d - 16]
     return f"וביום {day}"
 
 def is_hoshana_raba(m, d):
     return m == 7 and d == 21
 
-def get_greeting(m, d):
-    wd = datetime.now(TZ).weekday()
+def is_intermediate_moed_window_vihi(m, d):
+    return is_moed_window_vihi_pesach_or_sukkot(m, d)
+
+def get_greeting(y, m, d, for_date=None):
+    for_date = resolve_gregorian(for_date)
+    wd = for_date.weekday()
 
     if wd == 4:  # יום שישי
         return "שבת שלום!"
 
-    if m == 7 and d in [1,2]:
+    if is_rosh_hashana(m, d):
         return "שנה טובה!"
 
-    if m == 7 and d == 10:
+    if is_yom_kippur(m, d):
         return "גמר חתימה טובה!"
 
     if m == 5 and d == 9:
         return "צום קל"
 
-    if get_day_name(m, d):
+    if get_day_name(y, m, d):
         return "חג שמח!"
 
     return ""
 
 def get_rosh_chodesh_state(for_date=None):
-    if not for_date:
-        for_date = date.today()
-
-    today = for_date
+    today = resolve_gregorian(for_date)
     yesterday = today - timedelta(days=1)
     tomorrow = today + timedelta(days=1)
 
-    y, m, d = hebrew.from_gregorian(today.year, today.month, today.day)
-    y0, m0, d0 = hebrew.from_gregorian(yesterday.year, yesterday.month, yesterday.day)
-    y2, m2, d2 = hebrew.from_gregorian(tomorrow.year, tomorrow.month, tomorrow.day)
+    _, _, d = hebrew_triple(today)
+    _, _, d0 = hebrew_triple(yesterday)
+    _, _, d2 = hebrew_triple(tomorrow)
 
-    # יום ראשון של ראש חודש (א׳)
     if d == 1:
         return "day1"
 
-    # יום שני של ראש חודש (ל׳)
     if d == 30:
         return "day2"
 
-    # ערב ראש חודש (ערבית בלבד)
     if d2 == 1 or d2 == 30:
         return "erev"
 
-    # היום שאחרי יום 30 (יום 1 כבר טופל)
     if d0 == 30:
         return "day1"
 
     return None
 
 def needs_yaale_veyavo(for_date=None):
-    if not for_date:
-        for_date = date.today()
+    _, m, d = hebrew_triple(for_date)
 
-    y, m, d = hebrew.from_gregorian(for_date.year, for_date.month, for_date.day)
-
-    # ראש חודש
     if d == 1 or d == 30:
         return True
 
-    # פסח (כולל חול המועד)
-    if m == 1 and d >= 15:
+    if is_pesach_from_first_day(m, d):
         return True
 
-    # שבועות
-    if m == 3 and d == 6:
+    if is_shavuot(m, d):
         return True
 
-    # סוכות (כולל חול המועד)
-    if m == 7 and d >= 15:
+    if is_sukkot_from_first_day(m, d):
         return True
 
     return False
 
+
+def hallel_shacharit_line(for_date=None):
+    for_date = resolve_gregorian(for_date)
+    _, m, d = hebrew_triple(for_date)
+    rc = get_rosh_chodesh_state(for_date)
+    ch = is_chanukah(m, d)
+
+    if ch and rc in RC_FULL_DAYS and not is_rosh_hashana(m, d):
+        return "הלל בדילוג"
+
+    if is_rosh_hashana(m, d):
+        return "הלל שלם"
+
+    if is_pesach_yom_tov(m, d):
+        return "הלל שלם"
+    if is_pesach_hallel_dilug_range(m, d):
+        return "הלל בדילוג"
+
+    if is_shavuot(m, d):
+        return "הלל שלם"
+
+    if is_sukkot_hallel_through_shemini(m, d):
+        return "הלל שלם"
+
+    if ch:
+        return "הלל שלם"
+
+    if is_modern_israel_festivals(m, d):
+        return "הלל שלם"
+
+    if rc in RC_FULL_DAYS:
+        return "הלל בדילוג"
+
+    return None
+
+
+def insert_hallel_shacharit(shacharit, for_date):
+    hl = hallel_shacharit_line(for_date)
+    if not hl or hl in shacharit:
+        return
+    if "ברכי נפשי" in shacharit:
+        shacharit.insert(shacharit.index("ברכי נפשי"), hl)
+        return
+    yaale_idx = [i for i, x in enumerate(shacharit) if x == "יעלה ויבוא"]
+    if yaale_idx:
+        shacharit.insert(yaale_idx[-1] + 1, hl)
+        return
+    for token in ("אין למנצח", "אין אב הרחמים"):
+        if token in shacharit:
+            shacharit.insert(shacharit.index(token), hl)
+            return
+    shacharit.append(hl)
+
+
+def arvit_hallel_leil_pesach_lines(for_date=None):
+    for_date = resolve_gregorian(for_date)
+    _, m, d = hebrew_triple(for_date)
+    if m != 1:
+        return []
+    if is_erev_pesach_seder(m, d):
+        return ["הלל שלם (ליל פסח)"]
+    return []
+
+
+# ===== ZMANIM (Hebcal API) =====
+def _iso_hhmm(iso_str):
+    if not iso_str:
+        return "—"
+    try:
+        return datetime.fromisoformat(iso_str).astimezone(TZ).strftime("%H:%M")
+    except ValueError:
+        return "—"
+
+
+_hebcal_ok = {}
+_hebcal_shabbat_week = {}
+
+
+def hebcal_zmanim_lines(for_date=None):
+    """שלוש שורות: סוף ק״ש גר״א, שקיעה, צאת כוכבים (מטמון לפי תאריך)."""
+    for_date = resolve_gregorian(for_date)
+    key = for_date.isoformat()
+    if key not in _hebcal_ok:
+        url = (
+            "https://www.hebcal.com/zmanim"
+            f"?cfg=json&latitude={ZMANIM_LATITUDE}&longitude={ZMANIM_LONGITUDE}"
+            f"&tzid=Asia%2FJerusalem&date={key}"
+        )
+        try:
+            r = requests.get(url, timeout=20)
+            r.raise_for_status()
+            t = r.json().get("times")
+            if isinstance(t, dict):
+                _hebcal_ok[key] = t
+        except (requests.RequestException, ValueError, TypeError):
+            pass
+    times = _hebcal_ok.get(key)
+    t = times or {}
+    return (
+        f"סוף זמן ק״ש: {_iso_hhmm(t.get('sofZmanShma'))}",
+        f"שקיעה: {_iso_hhmm(t.get('sunset'))}",
+        f"צאת הכוכבים: {_iso_hhmm(t.get(HEBCAL_TZEIT_FIELD))}",
+    )
+
+
+def hebcal_shabbat_candles_havdalah(for_date=None):
+    for_date = resolve_gregorian(for_date)
+    iso_y, iso_w, _ = for_date.isocalendar()
+    wkey = f"{iso_y}-W{iso_w}"
+    if wkey not in _hebcal_shabbat_week:
+        url = (
+            "https://www.hebcal.com/shabbat"
+            f"?cfg=json&latitude={ZMANIM_LATITUDE}&longitude={ZMANIM_LONGITUDE}"
+            f"&tzid=Asia%2FJerusalem&M=on"
+            f"&gy={for_date.year}&gm={for_date.month}&gd={for_date.day}"
+        )
+        candles_iso = havdalah_iso = None
+        try:
+            r = requests.get(url, timeout=20)
+            r.raise_for_status()
+            for it in r.json().get("items") or []:
+                cat = it.get("category")
+                if cat == "candles":
+                    candles_iso = it.get("date")
+                elif cat == "havdalah":
+                    havdalah_iso = it.get("date")
+        except (requests.RequestException, ValueError, TypeError):
+            pass
+        _hebcal_shabbat_week[wkey] = (candles_iso, havdalah_iso)
+    return _hebcal_shabbat_week[wkey]
+
+
+def format_section(name, items):
+    return f"{name}:\n" + "\n".join(items)
+
 # ===== MESSAGE =====
 def build_message(for_date=None):
-    if not for_date:
-        for_date = date.today()
+    for_date = resolve_gregorian(for_date)
 
     header = get_hebrew_date(for_date)
 
-    y, m, d = hebrew.from_gregorian(for_date.year, for_date.month, for_date.day)
-    
-    day_name = get_day_name(m, d)
+    y, m, d = hebrew_triple(for_date)
+
+    day_name = get_day_name(y, m, d)
     if day_name:
         header += f" - {day_name}"
 
     sh_tach, min_tach = calculate_tachanun(for_date)
     omer = calculate_omer(for_date)
 
-    y,m,d = hebrew.from_gregorian(for_date.year, for_date.month, for_date.day)
     shacharit = []
 
     rc_state = get_rosh_chodesh_state(for_date)
 
-    is_special_day = is_shabbat() or is_yomtov_today()
-    
-    if rc_state in ["day1", "day2"]:
+    is_special_day = is_shabbat_date(for_date) or is_yomtov(m, d)
+
+    if rc_state in RC_FULL_DAYS:
         shacharit.append("אין תחנון")
         shacharit.append("יעלה ויבוא")
-        shacharit.append("הלל בדילוג")
         shacharit.append("ברכי נפשי")
 
     elif needs_yaale_veyavo(for_date):
@@ -561,75 +823,75 @@ def build_message(for_date=None):
     elif not is_special_day:
         if sh_tach == "לא":
             shacharit.append("אין תחנון")
-    
+
         elif sh_tach == "ארוך":
             shacharit.append("אין שינויים (והוא רחום)")
-        
+
         else:
             shacharit.append("אין שינויים")
-    
-    # למנצח — רק אם לא שבת/חג
+
+    insert_hallel_shacharit(shacharit, for_date)
+
     if not is_special_day:
-        if not has_lamenatzeach(m,d):
+        if not has_lamenatzeach(y, m, d):
             shacharit.append("אין למנצח")
 
-    if is_shabbat():
+    if is_shabbat_date(for_date):
         if not say_av_harachamim(for_date):
             shacharit.append("אין אב הרחמים")
 
-    if is_chanukah(m, d) or is_purim_day(m, d):
+    if needs_al_hanissim(y, m, d):
         shacharit.append("על הנסים")
 
-    if rc_state in ["day1", "day2"] or needs_yaale_veyavo(for_date):
+    if rc_state in RC_FULL_DAYS or needs_yaale_veyavo(for_date):
         mincha = ["אין תחנון", "יעלה ויבוא"]
 
     elif not is_special_day:
         mincha = ["אין תחנון"] if min_tach == "לא" else ["אין שינויים"]
-    
+
     else:
-        mincha = ["אין שינויים"]    
-    
-    # ===== צדקתך =====
-    if is_shabbat():
+        mincha = ["אין שינויים"]
+
+    if is_shabbat_date(for_date):
         if not say_tzidkatcha(for_date):
             mincha.append("אין צדקתך")
 
-    if is_chanukah(m, d) or is_purim_day(m, d):
+    if needs_al_hanissim(y, m, d):
         mincha.append("על הנסים")
 
     arvit = []
 
-    # ===== ויהי נועם =====
-    if datetime.now(TZ).weekday() == 6:  # מוצאי שבת
+    if for_date.weekday() == 6:
         if not say_vihi_noam(for_date):
-            arvit.append("אין ויהי נעם")    
+            arvit.append("אין ויהי נעם")
 
     if rc_state == "erev":
         arvit.append("יעלה ויבוא")
 
     elif needs_yaale_veyavo(for_date):
-        # ערבית של יום טוב / חול המועד
-        arvit.append("יעלה ויבוא")    
-    
+        arvit.append("יעלה ויבוא")
+
     if omer:
         arvit.append(f"ספירת העומר: היום {omer+1} לעומר")
 
-    if is_chanukah(m, d) or is_purim_day(m, d):
+    if needs_al_hanissim(y, m, d):
         arvit.append("על הנסים")
+
+    arvit.extend(arvit_hallel_leil_pesach_lines(for_date))
 
     if not arvit:
         arvit = ["אין שינויים"]
 
     musaf_extras = []
     has_musaf = (
-        rc_state in ["day1", "day2"]
+        rc_state in RC_FULL_DAYS
         or is_shabbat_date(for_date)
         or is_yomtov(m, d)
         or is_chol_hamoed(m, d)
         or is_hoshana_raba(m, d)
     )
 
-    if rc_state in ["day1", "day2"] and is_shabbat_date(for_date):
+    if rc_state in RC_FULL_DAYS and is_shabbat_date(for_date):
         musaf_extras.append("אתה יצרת")
 
     u_bayom = chol_sukkot_musaf_u_bayom(m, d)
@@ -642,12 +904,27 @@ def build_message(for_date=None):
     if has_musaf and is_chanukah(m, d):
         musaf_extras.append("על הנסים")
 
-    def section(name, items):
-        return f"{name}:\n" + "\n".join(items)
+    z_sof, z_shkiah, z_tzeit = hebcal_zmanim_lines(for_date)
+    candles_iso, havdalah_iso = hebcal_shabbat_candles_havdalah(for_date)
+
+    knisat_shabbat_block = ""
+    if for_date.weekday() == 4:
+        knisat_shabbat_block = (
+            "\n\n    "
+            + format_section("כניסת שבת", [f"{_iso_hhmm(candles_iso)}"])
+        )
+
+    motzei_shabbat_block = ""
+    if is_shabbat_date(for_date):
+        motzei_shabbat_block = (
+            "\n\n    "
+            + format_section("צאת השבת", [f"{_iso_hhmm(havdalah_iso)}"])
+        )
 
     msg = f"""📅 {header}
 
-    {section("🌅 שחרית", shacharit)}
+    {format_section("🌅 שחרית", shacharit)}
+    {z_sof}
     """
 
     if has_musaf:
@@ -655,23 +932,24 @@ def build_message(for_date=None):
         if musaf_extras:
             msg += "\n" + "\n".join(musaf_extras)
 
-    msg += f"""
-    
-    {section("🌇 מנחה", mincha)}
-    
-    {section("🌙 ערבית", arvit)}
+    msg += f"""{knisat_shabbat_block}
+
+    {format_section("🌇 מנחה", mincha)}
+    {z_shkiah}
+
+    {format_section("🌙 ערבית", arvit)}
+    {z_tzeit}{motzei_shabbat_block}
     """
 
-    greeting = get_greeting(m, d)
+    greeting = get_greeting(y, m, d, for_date)
     if greeting:
         msg += f"\n\n{greeting}"
-    
-    return msg    
+
+    return msg
 
 # ===== UPDATES =====
 def poll_updates():
     res = requests.get(f"{BASE_URL}/getUpdates").json()
-    users, sha = get_users()
 
     for u in res.get("result", []):
         if "message" not in u:
@@ -680,11 +958,8 @@ def poll_updates():
         chat_id = u["message"]["chat"]["id"]
         text = u["message"].get("text", "")
 
-        if text == "/start":
-            if chat_id not in users:
-                users.append(chat_id)
-                save_file(USERS_FILE, users, sha, "add user")
-                send(chat_id, "נרשמת בהצלחה 🙌")
+        if text == "/start" and add_user(chat_id):
+            send(chat_id, "נרשמת בהצלחה 🙌")
 
 # ===== MAIN =====
 def main():
@@ -693,7 +968,6 @@ def main():
     force_send = os.environ.get("FORCE_SEND") == "1"
 
     if force_send:
-        # שליחה רק אליך
         send(MY_CHAT_ID, build_message())
         return
 
@@ -704,10 +978,11 @@ def main():
         return
 
     msg = build_message()
-
-    if is_erev_special():
-        msg += "\n\n📅 גם למחר:\n\n"
-        msg += build_message(date.today() + timedelta(days=1))
+    today = date.today()
+    for d in multi_day_digest_dates(today):
+        heading = heading_for_multi_day_section(today, d)
+        msg += f"\n\n{heading}:\n\n"
+        msg += build_message(d)
 
     broadcast(msg)
 
