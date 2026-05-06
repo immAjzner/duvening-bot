@@ -166,10 +166,22 @@ def should_send_now():
     return True
 
 # ===== TELEGRAM =====
+def telegram_rtl_normalize(text):
+    rlm = "\u200f"
+    lines = []
+    for line in (text or "").split("\n"):
+        if not line.strip():
+            lines.append("")
+            continue
+        stripped = line.lstrip("\u200f\u200e")
+        lines.append(rlm + stripped)
+    return "\n".join(lines)
+
+
 def send(chat_id, msg):
     requests.post(f"{BASE_URL}/sendMessage", data={
         "chat_id": chat_id,
-        "text": msg
+        "text": telegram_rtl_normalize(msg)
     })
 
 def broadcast(msg):
@@ -1055,18 +1067,18 @@ def build_message(for_date=None):
     if is_shabbat_date(for_date) and havdalah_hhmm:
         motzei_shabbat_block = "\n\n" + format_section("צאת השבת", [havdalah_hhmm])
 
-    msg = f"{header} 📅\n\n{format_section('שחרית', shacharit)}"
+    msg = f"{header} 📅\n\n{format_section('שחרית 🌅', shacharit)}"
     if z_sof:
         msg += f"\n{z_sof}"
 
     if has_musaf:
-        msg += "\n\n" + format_section("מוסף", musaf_extras)
+        msg += "\n\n" + format_section("מוסף 🕍", musaf_extras)
 
-    msg += f"{knisat_shabbat_block}\n\n{format_section('מנחה', mincha)}"
+    msg += f"{knisat_shabbat_block}\n\n{format_section('מנחה 🌇', mincha)}"
     if z_shkiah:
         msg += f"\n{z_shkiah}"
 
-    msg += f"\n\n{format_section('ערבית', arvit)}"
+    msg += f"\n\n{format_section('ערבית 🌙', arvit)}"
     if z_tzeit:
         msg += f"\n{z_tzeit.strip()}"
     msg += motzei_shabbat_block
