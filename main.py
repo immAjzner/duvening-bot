@@ -558,6 +558,16 @@ def has_lamenatzeach(y, m, d):
 
     return True
 
+
+def say_ledavid_hashem(y, m, d):
+    return m == 6 or (m == 7 and d <= 21)
+
+
+def say_ledavid_hashem_arvit(for_date=None):
+    evening_date = resolve_gregorian(for_date) + timedelta(days=1)
+    _, m, d = hebrew_triple(evening_date)
+    return m == 6 or (m == 7 and d <= 20)
+
 # ===== TACHANUN =====
 def calculate_tachanun(for_date=None):
     for_date = resolve_gregorian(for_date)
@@ -1036,6 +1046,9 @@ def build_message(for_date=None):
     if needs_al_hanissim(y, m, d):
         shacharit.append("על הנסים")
 
+    if say_ledavid_hashem(y, m, d):
+        shacharit.append("לדוד ה׳")
+
     if rc_state in RC_FULL_DAYS or needs_yaale_veyavo(for_date):
         mincha = ["אין תחנון", "יעלה ויבוא"]
 
@@ -1071,6 +1084,9 @@ def build_message(for_date=None):
         arvit.append("על הנסים")
 
     arvit.extend(arvit_hallel_leil_pesach_lines(for_date))
+
+    if say_ledavid_hashem_arvit(for_date):
+        arvit.append("לדוד ה׳")
 
     if not arvit:
         arvit = ["אין שינויים"]
