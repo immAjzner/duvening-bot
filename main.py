@@ -1071,7 +1071,7 @@ def build_message(for_date=None):
 
     msg += f"\n\n{format_section('ערבית 🌙', arvit)}"
     if z_tzeit:
-        msg += f"\n{z_tzeit}"
+        msg += f"\n\n{z_tzeit}"
     msg += motzei_shabbat_block
 
     greeting = get_greeting(y, m, d, for_date)
