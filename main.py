@@ -1073,11 +1073,9 @@ def build_message(for_date=None):
         for ch in ("\u200f", "\u200e"):
             zt = zt.replace(ch, "")
         zt = zt.strip()
-        if ": " in zt:
-            z_title, z_time = zt.split(": ", 1)
-            msg += "\n" + format_section(z_title, [z_time.strip()])
-        else:
-            msg += f"\n{zt}"
+        # שורה אחת (כותרת + שעה), בתוך ביד''י RTL מבודד — נראה תקין בטלגרם אחרי בלוק ערבית
+        _rli, _pdi = "\u2067", "\u2069"
+        msg += f"\n{_rli}{zt}{_pdi}"
     msg += motzei_shabbat_block
 
     greeting = get_greeting(y, m, d, for_date)
