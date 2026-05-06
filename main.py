@@ -906,10 +906,11 @@ def _yeshiva_shabat_time_by_names(payload, accepted_names):
 
 def yeshiva_zmanim_lines(for_date=None):
     p = yeshiva_day_payload(for_date)
+    _rlm = "\u200f"
 
     def line(label, names):
         t = _yeshiva_time_by_names(p, names)
-        return f"{label}{t}" if t else ""
+        return f"{label}{_rlm}{t}".rstrip() if t else ""
 
     return (
         line("סוף זמן ק״ש: ", YI_NAMES_SOF_ZMAN_SHMA_GRA),
