@@ -926,12 +926,8 @@ def yeshiva_zmanim_lines(for_date=None):
     return (
         line("סוף זמן ק״ש: ", YI_NAMES_SOF_ZMAN_SHMA_GRA),
         line("שקיעה: ", YI_NAMES_SHKIA),
+        line("צאת הכוכבים: ", YI_NAMES_TZEIT),
     )
-
-
-def yeshiva_tzeit_hhmm(for_date=None):
-    p = yeshiva_day_payload(for_date)
-    return _yeshiva_time_by_names(p, YI_NAMES_TZEIT)
 
 
 def yeshiva_shabbat_candles_havdalah_hhmm(for_date=None):
@@ -1060,8 +1056,7 @@ def build_message(for_date=None):
     if has_musaf and is_chanukah(m, d):
         musaf_extras.append("על הנסים")
 
-    z_sof, z_shkiah = yeshiva_zmanim_lines(for_date)
-    tzeit_hhmm = yeshiva_tzeit_hhmm(for_date)
+    z_sof, z_shkiah, z_tzeit = yeshiva_zmanim_lines(for_date)
     candles_hhmm, havdalah_hhmm = yeshiva_shabbat_candles_havdalah_hhmm(for_date)
 
     knisat_shabbat_block = ""
@@ -1084,8 +1079,8 @@ def build_message(for_date=None):
         msg += f"\n{z_shkiah}"
 
     msg += f"\n\n{format_section('ערבית 🌙', arvit)}"
-    if tzeit_hhmm:
-        msg += "\n\n" + format_section("צאת הכוכבים", [tzeit_hhmm])
+    if z_tzeit:
+        msg += f"\n{z_tzeit}"
     msg += motzei_shabbat_block
 
     greeting = get_greeting(y, m, d, for_date)
