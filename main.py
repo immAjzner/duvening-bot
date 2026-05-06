@@ -926,8 +926,10 @@ def yeshiva_shabbat_candles_havdalah_hhmm(for_date=None):
     )
 
 
-def format_section(name, items):
-    return f"{name}:\n" + "\n".join(items)
+def format_section(name, items, *, add_colon=True):
+    name = name.strip()
+    header = f"{name}:\n" if add_colon else f"{name}\n"
+    return header + "\n".join(items)
 
 # ===== MESSAGE =====
 def build_message(for_date=None):
@@ -1054,7 +1056,7 @@ def build_message(for_date=None):
     if is_shabbat_date(for_date) and havdalah_hhmm:
         motzei_shabbat_block = "\n\n" + format_section("צאת השבת", [havdalah_hhmm])
 
-    msg = f"{header} 📅\n\n{format_section('שחרית 🌅', shacharit)}"
+    msg = f"{header} 📅\n\n{format_section('שחרית: 🌅', shacharit, add_colon=False)}"
     if z_sof:
         msg += f"\n{z_sof}"
 
@@ -1063,11 +1065,11 @@ def build_message(for_date=None):
         if musaf_extras:
             msg += "\n" + "\n".join(musaf_extras)
 
-    msg += f"{knisat_shabbat_block}\n\n{format_section('מנחה 🌇', mincha)}"
+    msg += f"{knisat_shabbat_block}\n\n{format_section('מנחה: 🌇', mincha, add_colon=False)}"
     if z_shkiah:
         msg += f"\n{z_shkiah}"
 
-    msg += f"\n\n{format_section('ערבית 🌙', arvit)}"
+    msg += f"\n\n{format_section('ערבית: 🌙', arvit, add_colon=False)}"
     if z_tzeit:
         zt = z_tzeit.strip()
         for ch in ("\u200f", "\u200e"):
