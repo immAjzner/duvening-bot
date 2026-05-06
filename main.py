@@ -20,10 +20,15 @@ MY_CHAT_ID = "5474184664"
 
 TZ = ZoneInfo("Asia/Jerusalem")
 
-# מיקום ושדה צאת כוכבים ב־Hebcal (ברירת מחדל tzeit85deg)
-ZMANIM_LATITUDE = 32.3328
-ZMANIM_LONGITUDE = 34.8600
-HEBCAL_TZEIT_FIELD = os.environ.get("HEBCAL_TZEIT_FIELD", "tzeit85deg")
+# זמני היום וכניסת/צאת שבת מאתר ישיבה (calaj) — מזהה מקום (173 = נתניה)
+YESHIVA_PLACE_ID = os.environ.get("YESHIVA_PLACE_ID", "173")
+YESHIVA_CALAJ_CACHE_VERSION = os.environ.get("YESHIVA_CALAJ_CACHE_VERSION", "21")
+
+YI_NAME_SOF_ZMAN_SHMA_GRA = 'סוף זמן קריאת שמע לגר"א'
+YI_NAME_SHKIA = "שקיעה"
+YI_NAME_TZEIT = "צאת הכוכבים"
+YI_NAME_KNISAT_SHABBAT = "כניסת שבת"
+YI_NAME_TSET_SHABBAT = "צאת שבת"
 
 HEBREW_MONTH_NAMES = (
     "",
@@ -719,72 +724,98 @@ def arvit_hallel_leil_pesach_lines(for_date=None):
     return []
 
 
-# ===== ZMANIM (Hebcal API) =====
-def _iso_hhmm(iso_str):
-    if not iso_str:
+# ===== ZMANIM (yeshiva.org.il calaj) =====
+def _normalize_hhmm(value):
+    """H:MM או HH:MM מהאתר → HH:MM."""
+    if not value or not isinstance(value, str):
+        return "—"
+    value = value.strip()
+    if not value:
+        return "—"
+    parts = value.split(":")
+    if len(parts) != 2:
         return "—"
     try:
-        return datetime.fromisoformat(iso_str).astimezone(TZ).strftime("%H:%M")
+        h, m = int(parts[0]), int(parts[1])
     except ValueError:
         return "—"
+    return f"{h:02d}:{m:02d}"
 
 
-_hebcal_ok = {}
-_hebcal_shabbat_week = {}
-
-
-def hebcal_zmanim_lines(for_date=None):
-    """שלוש שורות: סוף ק״ש גר״א, שקיעה, צאת כוכבים (מטמון לפי תאריך)."""
-    for_date = resolve_gregorian(for_date)
-    key = for_date.isoformat()
-    if key not in _hebcal_ok:
-        url = (
-            "https://www.hebcal.com/zmanim"
-            f"?cfg=json&latitude={ZMANIM_LATITUDE}&longitude={ZMANIM_LONGITUDE}"
-            f"&tzid=Asia%2FJerusalem&date={key}"
-        )
-        try:
-            r = requests.get(url, timeout=20)
-            r.raise_for_status()
-            t = r.json().get("times")
-            if isinstance(t, dict):
-                _hebcal_ok[key] = t
-        except (requests.RequestException, ValueError, TypeError):
-            pass
-    times = _hebcal_ok.get(key)
-    t = times or {}
+def _yeshiva_calaj_x(place_id, year, month, day, lang="heb", op_tail="d"):
+    pls = str(place_id)
     return (
-        f"סוף זמן ק״ש: {_iso_hhmm(t.get('sofZmanShma'))}",
-        f"שקיעה: {_iso_hhmm(t.get('sunset'))}",
-        f"צאת הכוכבים: {_iso_hhmm(t.get(HEBCAL_TZEIT_FIELD))}",
+        "r"
+        + op_tail
+        + str(month % 10)
+        + "h"
+        + str(year % 10)
+        + "d"
+        + pls[-1]
+        + str(day % 10)
+        + "k"
+        + lang[-1]
     )
 
 
-def hebcal_shabbat_candles_havdalah(for_date=None):
+_yeshiva_day_cache = {}
+
+
+def yeshiva_day_payload(for_date=None):
     for_date = resolve_gregorian(for_date)
-    iso_y, iso_w, _ = for_date.isocalendar()
-    wkey = f"{iso_y}-W{iso_w}"
-    if wkey not in _hebcal_shabbat_week:
-        url = (
-            "https://www.hebcal.com/shabbat"
-            f"?cfg=json&latitude={ZMANIM_LATITUDE}&longitude={ZMANIM_LONGITUDE}"
-            f"&tzid=Asia%2FJerusalem&M=on"
-            f"&gy={for_date.year}&gm={for_date.month}&gd={for_date.day}"
-        )
-        candles_iso = havdalah_iso = None
-        try:
-            r = requests.get(url, timeout=20)
-            r.raise_for_status()
-            for it in r.json().get("items") or []:
-                cat = it.get("category")
-                if cat == "candles":
-                    candles_iso = it.get("date")
-                elif cat == "havdalah":
-                    havdalah_iso = it.get("date")
-        except (requests.RequestException, ValueError, TypeError):
-            pass
-        _hebcal_shabbat_week[wkey] = (candles_iso, havdalah_iso)
-    return _hebcal_shabbat_week[wkey]
+    key = for_date.isoformat()
+    if key in _yeshiva_day_cache:
+        return _yeshiva_day_cache[key]
+    pl = YESHIVA_PLACE_ID
+    y, m, d = for_date.year, for_date.month, for_date.day
+    x = _yeshiva_calaj_x(pl, y, m, d)
+    url = (
+        "https://www.yeshiva.org.il/calendar/calaj.aspx"
+        f"?cache_version={YESHIVA_CALAJ_CACHE_VERSION}&v=1&op=d&pl={pl}"
+        f"&yr={y}&mn={m}&dy={d}&sv=false&lng=heb&x={x}"
+    )
+    data = {}
+    try:
+        r = requests.get(url, timeout=20)
+        r.raise_for_status()
+        if r.text.strip():
+            data = r.json()
+    except (requests.RequestException, ValueError, TypeError):
+        pass
+    _yeshiva_day_cache[key] = data if isinstance(data, dict) else {}
+    return _yeshiva_day_cache[key]
+
+
+def _yeshiva_time_by_name(payload, zman_name):
+    for row in payload.get("times") or []:
+        if row.get("name") == zman_name:
+            return _normalize_hhmm(row.get("value"))
+    return "—"
+
+
+def _yeshiva_shabat_time_by_name(payload, zman_name):
+    sh = payload.get("shabat") or {}
+    for row in sh.get("times") or []:
+        if row.get("name") == zman_name:
+            return _normalize_hhmm(row.get("value"))
+    return "—"
+
+
+def yeshiva_zmanim_lines(for_date=None):
+    p = yeshiva_day_payload(for_date)
+    return (
+        f"סוף זמן ק״ש: {_yeshiva_time_by_name(p, YI_NAME_SOF_ZMAN_SHMA_GRA)}",
+        f"שקיעה: {_yeshiva_time_by_name(p, YI_NAME_SHKIA)}",
+        f"צאת הכוכבים: {_yeshiva_time_by_name(p, YI_NAME_TZEIT)}",
+    )
+
+
+def yeshiva_shabbat_candles_havdalah_hhmm(for_date=None):
+    p = yeshiva_day_payload(for_date)
+    return (
+        _yeshiva_shabat_time_by_name(p, YI_NAME_KNISAT_SHABBAT),
+        _yeshiva_shabat_time_by_name(p, YI_NAME_TSET_SHABBAT),
+    )
 
 
 def format_section(name, items):
@@ -904,40 +935,40 @@ def build_message(for_date=None):
     if has_musaf and is_chanukah(m, d):
         musaf_extras.append("על הנסים")
 
-    z_sof, z_shkiah, z_tzeit = hebcal_zmanim_lines(for_date)
-    candles_iso, havdalah_iso = hebcal_shabbat_candles_havdalah(for_date)
+    z_sof, z_shkiah, z_tzeit = yeshiva_zmanim_lines(for_date)
+    candles_hhmm, havdalah_hhmm = yeshiva_shabbat_candles_havdalah_hhmm(for_date)
 
     knisat_shabbat_block = ""
     if for_date.weekday() == 4:
         knisat_shabbat_block = (
             "\n\n    "
-            + format_section("כניסת שבת", [f"{_iso_hhmm(candles_iso)}"])
+            + format_section("כניסת שבת", [candles_hhmm])
         )
 
     motzei_shabbat_block = ""
     if is_shabbat_date(for_date):
         motzei_shabbat_block = (
             "\n\n    "
-            + format_section("צאת השבת", [f"{_iso_hhmm(havdalah_iso)}"])
+            + format_section("צאת השבת", [havdalah_hhmm])
         )
 
-    msg = f"""📅 {header}
+    msg = f"""{header} 📅
 
-    {format_section("🌅 שחרית", shacharit)}
+    {format_section("שחרית 🌅", shacharit)}
     {z_sof}
     """
 
     if has_musaf:
-        msg += "\n\n🕍 מוסף"
+        msg += "\n\nמוסף 🕍"
         if musaf_extras:
             msg += "\n" + "\n".join(musaf_extras)
 
     msg += f"""{knisat_shabbat_block}
 
-    {format_section("🌇 מנחה", mincha)}
+    {format_section("מנחה 🌇", mincha)}
     {z_shkiah}
 
-    {format_section("🌙 ערבית", arvit)}
+    {format_section("ערבית 🌙", arvit)}
     {z_tzeit}{motzei_shabbat_block}
     """
 
