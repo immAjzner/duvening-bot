@@ -170,7 +170,8 @@ def should_send_now():
 def send(chat_id, msg):
     requests.post(f"{BASE_URL}/sendMessage", data={
         "chat_id": chat_id,
-        "text": msg
+        "text": msg,
+        "parse_mode": "HTML"
     })
 
 def broadcast(msg):
@@ -371,16 +372,131 @@ def is_sukkot_hallel_through_shemini(m, d):
     return m == 7 and 15 <= d <= 22
 
 
-def is_yom_haatzmaut(m, d):
-    return m == 2 and d == 5
+def gregorian_from_hebrew(y, m, d):
+    return date(*hebrew.to_gregorian(y, m, d))
+
+
+def is_yom_haatzmaut(y, m, d):
+    actual = gregorian_from_hebrew(y, 2, 5)
+    if actual.weekday() == 4:  # ה׳ באייר ביום שישי -> מוקדם לחמישי
+        observed = actual - timedelta(days=1)
+    elif actual.weekday() == 5:  # ה׳ באייר בשבת -> מוקדם לחמישי
+        observed = actual - timedelta(days=2)
+    elif actual.weekday() == 0:  # ה׳ באייר ביום שני -> נדחה לשלישי
+        observed = actual + timedelta(days=1)
+    else:
+        observed = actual
+    return hebrew_triple(observed) == (y, m, d)
 
 
 def is_yom_yerushalayim(m, d):
     return m == 2 and d == 28
 
 
-def is_modern_israel_festivals(m, d):
-    return is_yom_haatzmaut(m, d) or is_yom_yerushalayim(m, d)
+def is_modern_israel_festivals(y, m, d):
+    return is_yom_haatzmaut(y, m, d) or is_yom_yerushalayim(m, d)
+
+
+def is_tzom_gedaliah_observed(for_date=None):
+    for_date = resolve_gregorian(for_date)
+    y, m, d = hebrew_triple(for_date)
+    if m != 7:
+        return False
+    fast = gregorian_from_hebrew(y, 7, 3)
+    if fast.weekday() == 5:
+        fast += timedelta(days=1)
+    return for_date == fast
+
+
+def is_asara_btevet_observed(for_date=None):
+    for_date = resolve_gregorian(for_date)
+    y, _, _ = hebrew_triple(for_date)
+    return for_date == gregorian_from_hebrew(y, 10, 10)
+
+
+def is_shiva_asar_btammuz_observed(for_date=None):
+    for_date = resolve_gregorian(for_date)
+    y, _, _ = hebrew_triple(for_date)
+    fast = gregorian_from_hebrew(y, 4, 17)
+    if fast.weekday() == 5:
+        fast += timedelta(days=1)
+    return for_date == fast
+
+
+def is_tisha_bav_observed(for_date=None):
+    for_date = resolve_gregorian(for_date)
+    y, _, _ = hebrew_triple(for_date)
+    fast = gregorian_from_hebrew(y, 5, 9)
+    if fast.weekday() == 5:
+        fast += timedelta(days=1)
+    return for_date == fast
+
+
+def is_taanit_esther_observed(for_date=None):
+    for_date = resolve_gregorian(for_date)
+    y, _, _ = hebrew_triple(for_date)
+    adar = 13 if is_hebrew_leap_year(y) else 12
+    fast = gregorian_from_hebrew(y, adar, 13)
+    if fast.weekday() == 5:
+        fast -= timedelta(days=2)
+    return for_date == fast
+
+
+def is_public_fast_observed(for_date=None):
+    return (
+        is_tzom_gedaliah_observed(for_date)
+        or is_asara_btevet_observed(for_date)
+        or is_shiva_asar_btammuz_observed(for_date)
+        or is_tisha_bav_observed(for_date)
+        or is_taanit_esther_observed(for_date)
+    )
+
+
+def is_aseret_yemei_teshuva(m, d):
+    return m == 7 and 1 <= d <= 10
+
+
+SELICHOT_WEEKDAY_LABELS = {
+    6: "א׳",
+    0: "ב׳",
+    1: "ג׳",
+    2: "ד׳",
+    3: "ה׳",
+    4: "ו׳",
+}
+
+
+def ashkenaz_selichot_start_date(rh_year):
+    rh = gregorian_from_hebrew(rh_year, 7, 1)
+    days_since_sunday = (rh.weekday() - 6) % 7
+    start = rh - timedelta(days=days_since_sunday)
+    if (rh - start).days < 4:
+        start -= timedelta(days=7)
+    return start
+
+
+def ashkenaz_selichot_line(for_date=None):
+    evening_date = resolve_gregorian(for_date) + timedelta(days=1)
+    y, m, d = hebrew_triple(evening_date)
+    rh_year = y + 1 if m <= 6 else y
+    start = ashkenaz_selichot_start_date(rh_year)
+    erev_yk = gregorian_from_hebrew(rh_year, 7, 9)
+
+    if not (start <= evening_date <= erev_yk):
+        return None
+    if evening_date.weekday() == 5:
+        return None
+    if m == 7 and d in (1, 2):
+        return None
+    if m == 6 and d == 29:
+        return "סליחות ערב ראש השנה"
+    if m == 7 and d == 9:
+        return "סליחות ערב יו״כ"
+
+    weekday_label = SELICHOT_WEEKDAY_LABELS.get(evening_date.weekday())
+    if not weekday_label:
+        return None
+    return f"סליחות יום {weekday_label}"
 
 
 def is_moed_window_vihi_pesach_or_sukkot(m, d):
@@ -544,7 +660,7 @@ def has_lamenatzeach(y, m, d):
     if is_pesach_seventh_day(m, d) or is_shavuot(m, d):
         return False
 
-    if is_modern_israel_festivals(m, d):
+    if is_modern_israel_festivals(y, m, d):
         return False
 
     if m == 5 and d == 9:
@@ -572,7 +688,7 @@ def say_ledavid_hashem_arvit(for_date=None):
 def calculate_tachanun(for_date=None):
     for_date = resolve_gregorian(for_date)
 
-    wd = datetime.now(TZ).weekday()
+    wd = for_date.weekday()
     _, m, d = hebrew_triple(for_date)
 
     if d == 1 or d == 30:
@@ -641,6 +757,12 @@ def get_day_name(y, m, d):
 
     if is_sukkot_from_first_day(m, d):
         return "סוכות"
+
+    if is_yom_haatzmaut(y, m, d):
+        return "יום העצמאות"
+
+    if is_yom_yerushalayim(m, d):
+        return "יום ירושלים"
 
     return None
 
@@ -764,7 +886,7 @@ def hallel_shacharit_line(for_date=None):
     if ch:
         return "הלל שלם"
 
-    if is_modern_israel_festivals(m, d):
+    if is_modern_israel_festivals(y, m, d):
         return "הלל שלם"
 
     if rc in RC_FULL_DAYS:
@@ -993,6 +1115,11 @@ def format_section(name, items):
     name = name.strip()
     return f"{name}:\n" + "\n".join(items)
 
+
+def append_once(items, value):
+    if value not in items:
+        items.append(value)
+
 # ===== MESSAGE =====
 def build_message(for_date=None):
     for_date = resolve_gregorian(for_date)
@@ -1046,6 +1173,13 @@ def build_message(for_date=None):
     if needs_al_hanissim(y, m, d):
         shacharit.append("על הנסים")
 
+    if is_aseret_yemei_teshuva(m, d):
+        append_once(shacharit, "שיר המעלות ממעמקים")
+        append_once(shacharit, "אבינו מלכנו")
+
+    if is_public_fast_observed(for_date):
+        append_once(shacharit, "אבינו מלכנו")
+
     if say_ledavid_hashem(y, m, d):
         shacharit.append("לדוד ה׳")
 
@@ -1064,6 +1198,12 @@ def build_message(for_date=None):
 
     if needs_al_hanissim(y, m, d):
         mincha.append("על הנסים")
+
+    if is_public_fast_observed(for_date):
+        mincha.append("עננו ה׳ עננו")
+
+    if is_tisha_bav_observed(for_date):
+        mincha.append("נחמו")
 
     arvit = []
 
@@ -1124,7 +1264,10 @@ def build_message(for_date=None):
     if is_shabbat_date(for_date) and havdalah_hhmm:
         motzei_shabbat_block = "\n\n" + format_section("צאת השבת", [havdalah_hhmm])
 
-    msg = f"{header} 📅\n\n{format_section('שחרית 🌅', shacharit)}"
+    msg = f"{header} 📅"
+    if is_aseret_yemei_teshuva(m, d):
+        msg += "\n\n<b>עשרת ימי תשובה</b>"
+    msg += f"\n\n{format_section('שחרית 🌅', shacharit)}"
     if z_sof:
         msg += f"\n\n{z_sof}"
 
@@ -1142,6 +1285,10 @@ def build_message(for_date=None):
 
     msg += f"\n\n{format_section('ערבית 🌙', arvit)}"
     msg += motzei_shabbat_block
+
+    selichot = ashkenaz_selichot_line(for_date)
+    if selichot:
+        msg += f"\n\n{selichot}"
 
     mevarchim = shabbat_mevarchim_line(for_date)
     if mevarchim:
