@@ -1068,10 +1068,10 @@ def build_message(for_date=None):
     msg += f"{knisat_shabbat_block}\n\n{format_section('מנחה 🌇', mincha)}"
     if z_shkiah:
         msg += f"\n{z_shkiah}"
+    if z_tzeit:
+        msg += f"\n{z_tzeit}"
 
     msg += f"\n\n{format_section('ערבית 🌙', arvit)}"
-    if z_tzeit:
-        msg += f"\n\n\u202b{z_tzeit}\u202c"
     msg += motzei_shabbat_block
 
     greeting = get_greeting(y, m, d, for_date)
