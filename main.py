@@ -340,8 +340,24 @@ def is_erev_pesach_seder(m, d):
     return m == 1 and d == 14
 
 
+def is_pesach_sheni(m, d):
+    return m == 2 and d == 14
+
+
+def is_tu_bav(m, d):
+    return m == 5 and d == 15
+
+
+def is_tu_bishvat(m, d):
+    return m == 11 and d == 15
+
+
 def is_shavuot(m, d):
     return m == 3 and d == 6
+
+
+def is_isru_chag(m, d):
+    return (m, d) in ((1, 22), (3, 7), (7, 23))
 
 
 def is_sivan_shabbat_before_shavuot(m, d):
@@ -737,6 +753,18 @@ def say_vihi_noam(for_date=None):
     return True
 
 def get_day_name(y, m, d):
+    if is_pesach_sheni(m, d):
+        return "פסח שני"
+
+    if is_isru_chag(m, d):
+        return "איסרו חג"
+
+    if is_tu_bav(m, d):
+        return "ט״ו באב"
+
+    if is_tu_bishvat(m, d):
+        return "ט״ו בשבט"
+
     if m == 2 and d == 18:
         return "ל״ג בעומר"
 
@@ -1141,8 +1169,9 @@ def build_message(for_date=None):
     shacharit = []
 
     rc_state = get_rosh_chodesh_state(for_date)
+    is_shabbat = is_shabbat_date(for_date)
 
-    is_special_day = is_shabbat_date(for_date) or is_yomtov(m, d)
+    is_special_day = is_shabbat or is_yomtov(m, d)
 
     if rc_state in RC_FULL_DAYS:
         shacharit.append("אין תחנון")
@@ -1169,7 +1198,7 @@ def build_message(for_date=None):
         if not has_lamenatzeach(y, m, d):
             shacharit.append("אין למנצח")
 
-    if is_shabbat_date(for_date):
+    if is_shabbat:
         if not say_av_harachamim(for_date):
             shacharit.append("אין אב הרחמים")
 
@@ -1178,9 +1207,10 @@ def build_message(for_date=None):
 
     if is_aseret_yemei_teshuva(m, d):
         append_once(shacharit, "שיר המעלות ממעמקים")
-        append_once(shacharit, "אבינו מלכנו")
+        if not is_shabbat:
+            append_once(shacharit, "אבינו מלכנו")
 
-    if is_public_fast_observed(for_date):
+    if is_public_fast_observed(for_date) and not is_shabbat:
         append_once(shacharit, "אבינו מלכנו")
 
     if say_ledavid_hashem(y, m, d):
@@ -1195,7 +1225,7 @@ def build_message(for_date=None):
     else:
         mincha = ["אין שינויים"]
 
-    if is_shabbat_date(for_date):
+    if is_shabbat:
         if not say_tzidkatcha(for_date):
             mincha.append("אין צדקתך")
 
@@ -1237,13 +1267,13 @@ def build_message(for_date=None):
     musaf_extras = []
     has_musaf = (
         rc_state in RC_FULL_DAYS
-        or is_shabbat_date(for_date)
+        or is_shabbat
         or is_yomtov(m, d)
         or is_chol_hamoed(m, d)
         or is_hoshana_raba(m, d)
     )
 
-    if rc_state in RC_FULL_DAYS and is_shabbat_date(for_date):
+    if rc_state in RC_FULL_DAYS and is_shabbat:
         musaf_extras.append("אתה יצרת")
 
     u_bayom = chol_sukkot_musaf_u_bayom(m, d)
@@ -1264,7 +1294,7 @@ def build_message(for_date=None):
         knisat_shabbat_block = "\n\n" + format_section("כניסת שבת", [candles_hhmm])
 
     motzei_shabbat_block = ""
-    if is_shabbat_date(for_date) and havdalah_hhmm:
+    if is_shabbat and havdalah_hhmm:
         motzei_shabbat_block = "\n\n" + format_section("צאת השבת", [havdalah_hhmm])
 
     msg = f"{header} 📅"
