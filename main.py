@@ -519,11 +519,13 @@ def is_shabbat_date(for_date):
     return for_date.weekday() == 5
 
 def is_yomtov_today():
-    return is_yomtov(*hebrew_triple(date.today()))
+    _, m, d = hebrew_triple(date.today())
+    return is_yomtov(m, d)
 
 
 def day_is_shabbat_or_yomtov(gd):
-    return is_shabbat_date(gd) or is_yomtov(*hebrew_triple(gd))
+    _, m, d = hebrew_triple(gd)
+    return is_shabbat_date(gd) or is_yomtov(m, d)
 
 
 def need_multi_day_digest(today):
@@ -611,7 +613,8 @@ def say_av_harachamim(for_date=None):
 
     # ערב חג (פסח/שבועות/ר"ה)
     tomorrow = for_date + timedelta(days=1)
-    if is_yomtov(*hebrew_triple(tomorrow)):
+    _, tomorrow_m, tomorrow_d = hebrew_triple(tomorrow)
+    if is_yomtov(tomorrow_m, tomorrow_d):
         return False
 
     # ========= ברירת מחדל =========
