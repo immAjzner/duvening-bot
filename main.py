@@ -467,6 +467,20 @@ def is_public_fast_observed(for_date=None):
     )
 
 
+def get_fast_name(for_date=None):
+    if is_tzom_gedaliah_observed(for_date):
+        return "צום גדליה"
+    if is_asara_btevet_observed(for_date):
+        return "עשרה בטבת"
+    if is_taanit_esther_observed(for_date):
+        return "תענית אסתר"
+    if is_shiva_asar_btammuz_observed(for_date):
+        return "שבעה עשר בתמוז"
+    if is_tisha_bav_observed(for_date):
+        return "תשעה באב"
+    return None
+
+
 def is_aseret_yemei_teshuva(m, d):
     return m == 7 and 1 <= d <= 10
 
@@ -832,22 +846,21 @@ def get_greeting(y, m, d, for_date=None):
     for_date = resolve_gregorian(for_date)
     wd = for_date.weekday()
 
-    if wd == 4:  # יום שישי
-        return "שבת שלום!"
-
     if is_rosh_hashana(m, d):
-        return "שנה טובה!"
+        greeting = "שנה טובה!"
+    elif is_yom_kippur(m, d):
+        greeting = "גמר חתימה טובה!"
+    elif get_fast_name(for_date):
+        greeting = "צום קל"
+    elif get_day_name(y, m, d):
+        greeting = "חג שמח!"
+    else:
+        greeting = ""
 
-    if is_yom_kippur(m, d):
-        return "גמר חתימה טובה!"
+    if wd in (4, 5):  # יום שישי או שבת
+        return f"שבת שלום ו{greeting}" if greeting else "שבת שלום!"
 
-    if m == 5 and d == 9:
-        return "צום קל"
-
-    if get_day_name(y, m, d):
-        return "חג שמח!"
-
-    return ""
+    return greeting
 
 def get_rosh_chodesh_state(for_date=None):
     today = resolve_gregorian(for_date)
@@ -1168,9 +1181,9 @@ def build_message(for_date=None):
 
     y, m, d = hebrew_triple(for_date)
 
-    day_name = get_day_name(y, m, d)
+    day_name = get_day_name(y, m, d) or get_fast_name(for_date)
     if day_name:
-        header += f" - {day_name}"
+        header += f" - <b>{day_name}</b>"
 
     sh_tach, min_tach = calculate_tachanun(for_date)
     omer = calculate_omer(for_date)
