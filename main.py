@@ -44,7 +44,6 @@ YI_NAMES_SOF_ZMAN_SHMA_GRA = (
 )
 YI_NAMES_SHKIA = ("שקיעה",)
 YI_NAMES_TZEIT = ("צאת הכוכבים",)
-YI_NAMES_KNISAT_SHABBAT = ("כניסת שבת",)
 YI_NAMES_TSET_SHABBAT = ("צאת שבת", "יציאת שבת")
 
 HEBREW_MONTH_NAMES = (
@@ -978,6 +977,15 @@ def _normalize_hhmm(value):
     return f"{h:02d}:{m:02d}"
 
 
+def _shift_hhmm(hhmm, minutes_delta):
+    hhmm = _normalize_hhmm(hhmm)
+    if not hhmm:
+        return None
+    h, m = (int(part) for part in hhmm.split(":"))
+    total = (h * 60 + m + minutes_delta) % (24 * 60)
+    return f"{total // 60:02d}:{total % 60:02d}"
+
+
 def _yeshiva_calaj_x(place_id, year, month, day, lang="heb", op_tail="d"):
     pls = str(place_id)
     return (
@@ -1136,8 +1144,9 @@ def yeshiva_zmanim_lines(for_date=None):
 
 def yeshiva_shabbat_candles_havdalah_hhmm(for_date=None):
     p = yeshiva_day_payload(for_date)
+    shkiah_hhmm = _yeshiva_time_by_names(p, YI_NAMES_SHKIA)
     return (
-        _yeshiva_shabat_time_by_names(p, YI_NAMES_KNISAT_SHABBAT),
+        _shift_hhmm(shkiah_hhmm, -18),
         _yeshiva_shabat_time_by_names(p, YI_NAMES_TSET_SHABBAT),
     )
 
