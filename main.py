@@ -22,9 +22,8 @@ MY_CHAT_ID = "5474184664"
 
 TZ = ZoneInfo("Asia/Jerusalem")
 
-# זמני היום וכניסת/צאת שבת מאתר ישיבה (calaj) — מזהה מקום (173 = נתניה)
+# זמני היום וכניסת/צאת שבת מאתר ישיבה — מזהה מקום (173 = נתניה)
 YESHIVA_PLACE_ID = os.environ.get("YESHIVA_PLACE_ID", "173")
-YESHIVA_CALAJ_CACHE_VERSION = os.environ.get("YESHIVA_CALAJ_CACHE_VERSION", "21")
 
 # כותרות כמו בדפדפן — בלי זה calaj לעיתים מחזיר HTML/403 וה־JSON לא נטען
 YESHIVA_HTTP_HEADERS = {
@@ -557,8 +556,7 @@ def day_is_shabbat_or_yomtov(gd):
 
 
 def need_multi_day_digest(today):
-    wd = datetime.now(TZ).weekday()
-    if wd == 4:
+    if datetime.now(TZ).weekday() == 4:
         return True
     return day_is_shabbat_or_yomtov(today + timedelta(days=1))
 
@@ -572,19 +570,6 @@ def multi_day_digest_dates(today):
         if day_is_shabbat_or_yomtov(d):
             out.append(d)
     return out
-
-
-def heading_for_multi_day_section(today, d):
-    n = (d - today).days
-    if n == 1:
-        return "📅 גם מחר"
-    if n == 2:
-        return "📅 גם בעוד יומיים"
-    if n == 3:
-        return "📅 גם בעוד שלושה ימים"
-    if n == 4:
-        return "📅 גם בעוד ארבעה ימים"
-    return f"📅 בעוד {n} ימים"
 
 
 def say_av_harachamim(for_date=None):
@@ -875,7 +860,7 @@ def get_greeting(y, m, d, for_date=None):
     else:
         greeting = ""
 
-    if wd in (4, 5):  # יום שישי או שבת
+    if wd == 5:  # שבת בלבד
         return f"שבת שלום ו{greeting}" if greeting else "שבת שלום!"
 
     return greeting
@@ -1017,20 +1002,11 @@ def _shift_hhmm(hhmm, minutes_delta):
     return f"{total // 60:02d}:{total % 60:02d}"
 
 
-def _yeshiva_calaj_x(place_id, year, month, day, lang="heb", op_tail="d"):
-    pls = str(place_id)
-    return (
-        "r"
-        + op_tail
-        + str(month % 10)
-        + "h"
-        + str(year % 10)
-        + "d"
-        + pls[-1]
-        + str(day % 10)
-        + "k"
-        + lang[-1]
-    )
+def _yeshiva_hebrew_month(hy, hm):
+    # convertdate uses Nisan=1..Adar(II)=12/13; yeshiva.org.il uses Tishrei=1..Elul=12/13.
+    if hm >= 7:
+        return hm - 6
+    return hm + (7 if hebrew.leap(hy) else 6)
 
 
 def _yeshiva_strip_html_fragment(frag):
@@ -1057,26 +1033,36 @@ def _yeshiva_extract_time_pairs(html_fragment):
     return rows
 
 
+_SHABAT_TIME_NAME_PREFIXES = (
+    "כניסת שבת",
+    "יציאת שבת",
+    "יציאת השבת",
+    "צאת שבת",
+    "צאת השבת",
+    "שעה עשירית",
+)
+
+
+def _is_shabat_time_name(name):
+    norm = _norm_zman_title(name)
+    return any(norm.startswith(p) for p in _SHABAT_TIME_NAME_PREFIXES)
+
+
 def _yeshiva_html_to_payload(page_html):
-    low = page_html.lower()
-    idx = low.find("class=shabat")
-    if idx == -1:
-        idx = low.find("class='shabat'")
-    if idx == -1:
-        idx = low.find('class="shabat"')
-    main = page_html if idx < 0 else page_html[:idx]
-    shabat_html = "" if idx < 0 else page_html[idx:]
+    daily, shabat = [], []
+    for row in _yeshiva_extract_time_pairs(page_html):
+        (shabat if _is_shabat_time_name(row["name"]) else daily).append(row)
     place_name = ""
     pm = re.search(
-        r"<div\s+class\s*=\s*DayPlace\s*>([^<]*)</div>",
+        r"<div\s+class\s*=\s*['\"]?DayPlace['\"]?\s*>([^<]*)</div>",
         page_html,
         re.I,
     )
     if pm:
         place_name = _norm_zman_title(pm.group(1))
     return {
-        "times": _yeshiva_extract_time_pairs(main),
-        "shabat": {"times": _yeshiva_extract_time_pairs(shabat_html)},
+        "times": daily,
+        "shabat": {"times": shabat},
         "place": {"name": place_name} if place_name else {},
     }
 
@@ -1114,12 +1100,13 @@ def yeshiva_day_payload(for_date=None):
     if key in _yeshiva_day_cache:
         return _yeshiva_day_cache[key]
     pl = YESHIVA_PLACE_ID
-    y, m, d = for_date.year, for_date.month, for_date.day
-    x = _yeshiva_calaj_x(pl, y, m, d)
+    hy, hm, hd = hebrew.from_gregorian(for_date.year, for_date.month, for_date.day)
+    yorg_month = _yeshiva_hebrew_month(hy, hm)
+    # timesDayPrint exposes a full set of daily zmanim for the requested place;
+    # the older calaj.aspx?op=d only returns Shabbat times for many dates.
     url = (
-        "https://www.yeshiva.org.il/calendar/calaj.aspx"
-        f"?cache_version={YESHIVA_CALAJ_CACHE_VERSION}&v=1&op=d&pl={pl}"
-        f"&yr={y}&mn={m}&dy={d}&sv=false&lng=heb&x={x}"
+        "https://www.yeshiva.org.il/calendar/timesDayPrint.aspx"
+        f"?hy={hy}&hm={yorg_month}&hd={hd}&place={pl}"
     )
     result = {}
     try:
@@ -1347,6 +1334,12 @@ def build_message(for_date=None):
     if has_musaf and is_chanukah(m, d):
         musaf_extras.append("על הנסים")
 
+    if not shacharit:
+        shacharit = ["אין שינויים"]
+
+    if has_musaf and not musaf_extras:
+        musaf_extras = ["אין שינויים"]
+
     z_sof, z_shkiah, z_tzeit = yeshiva_zmanim_lines(for_date)
     candles_hhmm, havdalah_hhmm = yeshiva_shabbat_candles_havdalah_hhmm(for_date)
 
@@ -1427,12 +1420,10 @@ def main():
     if is_shabbat() or is_yomtov_today():
         return
 
-    msg = build_message()
     today = date.today()
+    msg = build_message(today)
     for d in multi_day_digest_dates(today):
-        heading = heading_for_multi_day_section(today, d)
-        msg += f"\n\n{heading}:\n\n"
-        msg += build_message(d)
+        msg += "\n\n" + build_message(d)
 
     broadcast(msg)
 
