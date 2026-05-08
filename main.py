@@ -1342,14 +1342,7 @@ def build_message(for_date=None):
 
     z_sof, z_shkiah, z_tzeit = yeshiva_zmanim_lines(for_date)
     candles_hhmm, havdalah_hhmm = yeshiva_shabbat_candles_havdalah_hhmm(for_date)
-
-    knisat_shabbat_block = ""
-    if for_date.weekday() == 4 and candles_hhmm:
-        knisat_shabbat_block = "\n\n" + format_section("כניסת שבת", [candles_hhmm])
-
-    motzei_shabbat_block = ""
-    if is_shabbat and havdalah_hhmm:
-        motzei_shabbat_block = "\n\n" + format_section("צאת השבת", [havdalah_hhmm])
+    nbsp = "\u00a0"
 
     msg = f"{header} 📅"
     parsha_line = get_shabbat_parsha_line(for_date)
@@ -1364,17 +1357,20 @@ def build_message(for_date=None):
     if has_musaf:
         msg += "\n\n" + format_section("מוסף 🕍", musaf_extras)
 
-    msg += f"{knisat_shabbat_block}\n\n{format_section('מנחה 🌇', mincha)}"
+    msg += f"\n\n{format_section('מנחה 🌇', mincha)}"
     mincha_zmanim = []
     if z_shkiah:
         mincha_zmanim.append(z_shkiah)
     if z_tzeit:
         mincha_zmanim.append(z_tzeit)
+    if for_date.weekday() == 4 and candles_hhmm:
+        mincha_zmanim.append(f"כניסת שבת:{nbsp}{candles_hhmm}")
+    if is_shabbat and havdalah_hhmm:
+        mincha_zmanim.append(f"צאת השבת:{nbsp}{havdalah_hhmm}")
     if mincha_zmanim:
         msg += "\n\n" + "\n".join(mincha_zmanim)
 
     msg += f"\n\n{format_section('ערבית 🌙', arvit)}"
-    msg += motzei_shabbat_block
 
     selichot = ashkenaz_selichot_line(for_date)
     if selichot:
@@ -1404,6 +1400,14 @@ def poll_updates():
         if text == "/start" and add_user(chat_id):
             send(chat_id, "נרשמת בהצלחה 🙌")
 
+def build_daily_digest(today=None):
+    today = resolve_gregorian(today)
+    msg = build_message(today)
+    for d in multi_day_digest_dates(today):
+        msg += "\n\n" + build_message(d)
+    return msg
+
+
 # ===== MAIN =====
 def main():
     poll_updates()
@@ -1411,7 +1415,7 @@ def main():
     force_send = os.environ.get("FORCE_SEND") == "1"
 
     if force_send:
-        send(MY_CHAT_ID, build_message())
+        send(MY_CHAT_ID, build_daily_digest())
         return
 
     if not should_send_now():
@@ -1420,12 +1424,7 @@ def main():
     if is_shabbat() or is_yomtov_today():
         return
 
-    today = date.today()
-    msg = build_message(today)
-    for d in multi_day_digest_dates(today):
-        msg += "\n\n" + build_message(d)
-
-    broadcast(msg)
+    broadcast(build_daily_digest())
 
 if __name__ == "__main__":
     main()
