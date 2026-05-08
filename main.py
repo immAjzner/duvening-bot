@@ -71,7 +71,6 @@ HEBREW_WEEKDAY_NAMES = (
     "שבת",
     "ראשון",
 )
-FOUR_PARSHIYOS = frozenset({"Shekalim", "Zachor", "Parah", "Hachodesh"})
 RC_FULL_DAYS = frozenset({"day1", "day2"})
 EXTRA_DIGEST_MAX_OFFSET = 4  # היום + עד 4 ימים קדימה בהודעה אחת
 SUKKOT_MUSAF_U_BAYOM_DAYS = ("השני", "השלישי", "הרביעי", "החמישי", "השישי")
@@ -153,7 +152,7 @@ def save_last_run(today_str, sha):
 def should_send_now():
     now = datetime.now(TZ)
 
-    if not (5 <= now.hour <= 8):
+    if not (4 <= now.hour <= 8):
         return False
 
     today_str = now.date().isoformat()
@@ -652,14 +651,33 @@ def say_av_harachamim(for_date=None):
 def is_four_parshiyot(for_date=None):
     for_date = resolve_gregorian(for_date)
 
-    hdate = dates.GregorianDate(for_date.year, for_date.month, for_date.day).to_heb()
-
     if not is_shabbat_date(for_date):
         return False
 
-    parsha = parshios.getparsha(hdate)
+    hdate = dates.GregorianDate(for_date.year, for_date.month, for_date.day).to_heb()
+    hy = hdate.year
 
-    return parsha in FOUR_PARSHIYOS
+    # In a leap year the four parshiyot are read in Adar II (month 13);
+    # in a regular year, in Adar (month 12).
+    is_leap = ((7 * hy + 1) % 19) < 7
+    adar_month = 13 if is_leap else 12
+
+    # pyluach weekday: 1 = Sunday ... 7 = Shabbat
+    def shabbat_on_or_before(d):
+        wd = d.weekday()
+        return d if wd == 7 else d - wd
+
+    rc_adar = dates.HebrewDate(hy, adar_month, 1)
+    purim = dates.HebrewDate(hy, adar_month, 14)
+    rc_nisan = dates.HebrewDate(hy, 1, 1)
+
+    shekalim = shabbat_on_or_before(rc_adar)
+    # Zachor: Shabbat preceding Purim (or Purim itself if it falls on Shabbat)
+    zachor = purim if purim.weekday() == 7 else purim - purim.weekday()
+    hachodesh = shabbat_on_or_before(rc_nisan)
+    parah = hachodesh - 7
+
+    return hdate in (shekalim, zachor, parah, hachodesh)
 
 # ===== למנצח =====
 def has_lamenatzeach(y, m, d):
@@ -1164,6 +1182,27 @@ def yeshiva_shabbat_candles_havdalah_hhmm(for_date=None):
     )
 
 
+def get_shabbat_parsha_line(for_date):
+    if not is_shabbat_date(for_date):
+        return None
+
+    _, m, d = hebrew_triple(for_date)
+    if is_chol_hamoed_pesach(m, d):
+        return "שבת חוה״מ <b>פסח</b>"
+    if is_chol_hamoed_sukkot(m, d):
+        return "שבת חוה״מ <b>סוכות</b>"
+
+    hdate = dates.GregorianDate(for_date.year, for_date.month, for_date.day).to_heb()
+    parsha = parshios.getparsha_string(hdate, hebrew=True, israel=True)
+    if not parsha:
+        return None
+
+    parts = [p.strip() for p in parsha.split(",") if p.strip()]
+    if len(parts) >= 2:
+        return f"פרשות השבוע: <b>{'-'.join(parts)}</b>"
+    return f"פרשת השבוע: <b>{parts[0]}</b>"
+
+
 def format_section(name, items):
     name = name.strip()
     return f"{name}:\n" + "\n".join(items)
@@ -1320,6 +1359,9 @@ def build_message(for_date=None):
         motzei_shabbat_block = "\n\n" + format_section("צאת השבת", [havdalah_hhmm])
 
     msg = f"{header} 📅"
+    parsha_line = get_shabbat_parsha_line(for_date)
+    if parsha_line:
+        msg += f"\n\n{parsha_line}"
     if is_aseret_yemei_teshuva(m, d):
         msg += "\n\n<b>עשרת ימי תשובה</b>"
     msg += f"\n\n{format_section('שחרית 🌅', shacharit)}"
