@@ -151,7 +151,7 @@ def save_last_run(today_str, sha):
 def should_send_now():
     now = datetime.now(TZ)
 
-    if not (4 <= now.hour <= 8):
+    if not (2 <= now.hour <= 8):
         return False
 
     today_str = now.date().isoformat()
