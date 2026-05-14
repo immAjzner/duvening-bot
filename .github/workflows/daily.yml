@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
     inputs:
       force_send:
-        description: "Force send now"
+        description: "0 = normal run. Positive integer (e.g. 3) = preview only to your chat: that many separate messages for consecutive days (day 0 .. N-1)."
         required: false
-        default: "false"
+        default: "0"
 
 jobs:
   run:
@@ -28,4 +28,5 @@ jobs:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          FORCE_SEND: ${{ github.event.inputs.force_send == 'true' && '1' || '0' }}
+          # Scheduled runs have no workflow inputs; this falls back to 0. Manual runs use the value below (0, 1, 3, ...).
+          FORCE_SEND: ${{ github.event.inputs.force_send || '0' }}
