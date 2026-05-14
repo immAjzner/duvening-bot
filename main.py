@@ -34,6 +34,21 @@ def today_jerusalem():
     return datetime.now(TZ).date()
 
 
+def parse_force_send_count():
+    """כמה הודעות תצוגה מראש לשלוח רק ל־MY_CHAT_ID. 0 = ביטול (ריצה רגילה).
+
+    תומך ב־FORCE_SEND=1 כמו בעבר (הודעה אחת להיום).
+    """
+    raw = (os.environ.get("FORCE_SEND") or "").strip()
+    if not raw:
+        return 0
+    try:
+        n = int(raw, 10)
+    except ValueError:
+        return 0
+    return n if n > 0 else 0
+
+
 # זמני היום וכניסת/צאת שבת מאתר ישיבה — מזהה מקום (173 = נתניה)
 YESHIVA_PLACE_ID = os.environ.get("YESHIVA_PLACE_ID", "173")
 
@@ -1609,10 +1624,12 @@ def build_daily_digest(today=None):
 def main():
     poll_updates()
 
-    force_send = os.environ.get("FORCE_SEND") == "1"
-
-    if force_send:
-        send(MY_CHAT_ID, build_daily_digest())
+    force_n = parse_force_send_count()
+    if force_n > 0:
+        start = today_jerusalem()
+        for k in range(force_n):
+            day = start + timedelta(days=k)
+            send(MY_CHAT_ID, build_daily_digest(day))
         return
 
     if not should_send_now():
