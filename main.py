@@ -1437,6 +1437,33 @@ def format_section(name, items):
     return f"{name}:\n" + "\n".join(items)
 
 
+def musaf_header_line(y, m, d, rc_state, is_shabbat):
+    """Plain-language Musaf label (Rosh Chodesh, Shalosh Regalim, Shabbat, etc.)."""
+    rc = rc_state in RC_FULL_DAYS
+    regalim = (
+        is_pesach_from_first_day(m, d)
+        or is_shavuot(m, d)
+        or is_sukkot_from_first_day(m, d)
+        or is_chol_hamoed(m, d)
+        or is_hoshana_raba(m, d)
+    )
+    if rc and regalim:
+        return "מוסף ראש חודש ושלוש רגלים 🕍"
+    if rc and is_shabbat:
+        return "מוסף שבת ראש חודש 🕍"
+    if rc:
+        return "מוסף ראש חודש 🕍"
+    if regalim and is_shabbat:
+        return "מוסף שבת ושלוש רגלים 🕍"
+    if regalim:
+        return "מוסף שלוש רגלים 🕍"
+    if is_shabbat:
+        return "מוסף שבת 🕍"
+    if is_yomtov(m, d):
+        return "מוסף יום טוב 🕍"
+    return "מוסף 🕍"
+
+
 def append_once(items, value):
     if value not in items:
         items.append(value)
@@ -1579,6 +1606,8 @@ def build_message(for_date=None):
 
     if is_shabbat:
         if not say_tzidkatcha(for_date):
+            if mincha == ["אין שינויים"]:
+                mincha = []
             mincha.append(
                 format_with_reason("אין צדקתך", tzidkatcha_omit_reason(for_date))
             )
@@ -1676,7 +1705,7 @@ def build_message(for_date=None):
         msg += f"\n\n{z_sof}"
 
     if has_musaf:
-        msg += "\n\nמוסף 🕍"
+        msg += "\n\n" + musaf_header_line(y, m, d, rc_state, is_shabbat)
         if musaf_extras:
             msg += "\n" + "\n".join(musaf_extras)
 
