@@ -1593,6 +1593,9 @@ def build_message(for_date=None):
         mincha.append("נחמו")
 
     arvit = []
+    # Maariv at the end of this civil calendar day typically reflects the next Hebrew date (e.g. no RC Yaaleh
+    # after a one-day Rosh Chodesh). Yaaleh lines below use for_date + 1 day for that reason.
+    arvit_evening_date = for_date + timedelta(days=1)
 
     if is_shabbat:
         if not say_vihi_noam(for_date):
@@ -1605,11 +1608,13 @@ def build_message(for_date=None):
             format_with_reason("יעלה ויבוא", yaale_erev_rc_suffix(for_date))
         )
 
-    elif needs_yaale_veyavo(for_date):
-        if rc_state in RC_FULL_DAYS:
-            yv_note = rosh_chodesh_yaale_month_suffix(y, m, d, for_date)
+    elif needs_yaale_veyavo(arvit_evening_date):
+        y_a, m_a, d_a = hebrew_triple(arvit_evening_date)
+        rc_ar = get_rosh_chodesh_state(arvit_evening_date)
+        if rc_ar in RC_FULL_DAYS:
+            yv_note = rosh_chodesh_yaale_month_suffix(y_a, m_a, d_a, arvit_evening_date)
         else:
-            yv_note = yaale_vehavo_chag_reason(y, m, d)
+            yv_note = yaale_vehavo_chag_reason(y_a, m_a, d_a)
         arvit.append(format_with_reason("יעלה ויבוא", yv_note))
 
     if omer:
@@ -1651,9 +1656,6 @@ def build_message(for_date=None):
     if not shacharit:
         shacharit = ["אין שינויים"]
 
-    if has_musaf and not musaf_extras:
-        musaf_extras = ["אין שינויים"]
-
     z_sof, z_shkiah, z_tzeit = yeshiva_zmanim_lines(for_date)
     candles_hhmm, havdalah_hhmm = yeshiva_shabbat_candles_havdalah_hhmm(for_date)
     nbsp = "\u00a0"
@@ -1674,7 +1676,9 @@ def build_message(for_date=None):
         msg += f"\n\n{z_sof}"
 
     if has_musaf:
-        msg += "\n\n" + format_section("מוסף 🕍", musaf_extras)
+        msg += "\n\nמוסף 🕍"
+        if musaf_extras:
+            msg += "\n" + "\n".join(musaf_extras)
 
     msg += f"\n\n{format_section('מנחה 🌇', mincha)}"
     mincha_zmanim = []
