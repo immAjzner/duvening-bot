@@ -22,6 +22,18 @@ MY_CHAT_ID = "5474184664"
 
 TZ = ZoneInfo("Asia/Jerusalem")
 
+
+def today_jerusalem():
+    """Gregorian date in Asia/Jerusalem.
+
+    GitHub Actions and other hosts run in UTC; `date.today()` is the machine's
+    calendar day. Early morning in Israel (e.g. 0:00–02:59) is still "yesterday"
+    in UTC, which made the digest one civil day behind `should_send_now()` (which
+    already uses `datetime.now(TZ).date()`).
+    """
+    return datetime.now(TZ).date()
+
+
 # זמני היום וכניסת/צאת שבת מאתר ישיבה — מזהה מקום (173 = נתניה)
 YESHIVA_PLACE_ID = os.environ.get("YESHIVA_PLACE_ID", "173")
 
@@ -78,7 +90,7 @@ GITHUB_AUTH_HEADER = {"Authorization": f"Bearer {GITHUB_TOKEN}"}
 
 
 def resolve_gregorian(for_date=None):
-    return for_date if for_date is not None else date.today()
+    return for_date if for_date is not None else today_jerusalem()
 
 
 def hebrew_triple(for_date=None):
@@ -546,7 +558,7 @@ def is_shabbat_date(for_date):
     return for_date.weekday() == 5
 
 def is_yomtov_today():
-    _, m, d = hebrew_triple(date.today())
+    _, m, d = hebrew_triple(today_jerusalem())
     return is_yomtov(m, d)
 
 
