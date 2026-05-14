@@ -312,14 +312,13 @@ def upcoming_rosh_chodesh_dates_after_shabbat(shabbat_date):
 
 def shabbat_mevarchim_line(for_date=None):
     for_date = resolve_gregorian(for_date)
-    if for_date.weekday() != 4:
+    if not is_shabbat_date(for_date):
         return None
 
-    shabbat_date = for_date + timedelta(days=1)
-    if not is_shabbat_mevarchim(shabbat_date):
+    if not is_shabbat_mevarchim(for_date):
         return None
 
-    rc_dates = upcoming_rosh_chodesh_dates_after_shabbat(shabbat_date)
+    rc_dates = upcoming_rosh_chodesh_dates_after_shabbat(for_date)
     if not rc_dates:
         return None
 
@@ -894,8 +893,7 @@ def calculate_tachanun(for_date=None):
 
 def say_vihi_noam(for_date=None):
     for_date = resolve_gregorian(for_date)
-
-    if for_date.weekday() != 6:
+    if not is_shabbat_date(for_date):
         return True
 
     _, m, d = hebrew_triple(for_date)
@@ -930,6 +928,34 @@ def rosh_chodesh_header_name(y, m, d):
             return None
         return f"ראש חודש {hebrew_month_name(y2, m2)}"
     return None
+
+
+def rosh_chodesh_yaale_month_suffix(y, m, d, for_date=None):
+    """למשל 'ר״ח סיון' לשורת יעלה ויבוא במנחה/ערבית ביום ר״ח."""
+    for_date = resolve_gregorian(for_date)
+    if d == 1:
+        return f"ר״ח {hebrew_month_name(y, m)}"
+    if d == 30:
+        t = for_date + timedelta(days=1)
+        y2, m2, d2 = hebrew_triple(t)
+        if d2 == 1:
+            return f"ר״ח {hebrew_month_name(y2, m2)}"
+    return "ר״ח"
+
+
+def yaale_erev_rc_suffix(for_date=None):
+    """מחרת ר״ח (יו״א או יו״ל) לערבית — 'ר״ח סיון' ולא 'ערב ר״ח'."""
+    for_date = resolve_gregorian(for_date)
+    t = for_date + timedelta(days=1)
+    y2, m2, d2 = hebrew_triple(t)
+    if d2 == 1:
+        return f"ר״ח {hebrew_month_name(y2, m2)}"
+    if d2 == 30:
+        t3 = t + timedelta(days=1)
+        y3, m3, d3 = hebrew_triple(t3)
+        if d3 == 1:
+            return f"ר״ח {hebrew_month_name(y3, m3)}"
+    return "ר״ח"
 
 
 def get_day_name(y, m, d):
@@ -983,9 +1009,9 @@ def get_day_name(y, m, d):
 
 
 def vihi_noam_omit_reason(for_date=None):
-    """מוצג רק כשלא אומרים ״ויהי נעם״ במוצ״ש — תואם ל־say_vihi_noam (מבוסס על יום ראשון בלוח הגרגוריאני)."""
+    """מוצג רק כשלא אומרים ״ויהי נעם״ במוצ״ש — רק בהודעה של יום שבת (ערבית של מוצ״ש)."""
     for_date = resolve_gregorian(for_date)
-    if for_date.weekday() != 6:
+    if not is_shabbat_date(for_date):
         return None
     y, m, d = hebrew_triple(for_date)
     if is_yomtov(m, d):
@@ -1042,6 +1068,8 @@ def get_greeting(y, m, d, for_date=None):
         greeting = "גמר חתימה טובה!"
     elif get_fast_name(for_date):
         greeting = "צום קל"
+    elif (d == 1 or d == 30) and not is_rosh_hashana(m, d):
+        greeting = "חודש טוב!"
     elif get_day_name(y, m, d):
         greeting = "חג שמח!"
     else:
@@ -1448,17 +1476,17 @@ def build_message(for_date=None):
     is_special_day = is_shabbat or is_yomtov(m, d)
 
     if rc_state in RC_FULL_DAYS:
-        shacharit.append(format_ain_tachanun("ר״ח"))
+        shacharit.append("אין תחנון")
         shacharit.append("יעלה ויבוא")
         shacharit.append("ברכי נפשי")
 
     elif needs_yaale_veyavo(for_date):
-        shacharit.append(format_ain_tachanun(yaale_vehavo_chag_reason(y, m, d)))
+        shacharit.append("אין תחנון")
         shacharit.append("יעלה ויבוא")
 
     elif not is_special_day:
         if sh_tach == "לא":
-            shacharit.append(format_ain_tachanun(sh_skip_note))
+            shacharit.append("אין תחנון")
 
         elif sh_tach == "ארוך":
             shacharit.append("אין שינויים (והוא רחום)")
@@ -1471,9 +1499,7 @@ def build_message(for_date=None):
 
     if not is_special_day:
         if not has_lamenatzeach(y, m, d):
-            shacharit.append(
-                format_with_reason("אין למנצח", lamenatzeach_omit_reason(y, m, d))
-            )
+            shacharit.append("אין למנצח")
 
     if is_shabbat:
         if not say_av_harachamim(for_date):
@@ -1498,11 +1524,13 @@ def build_message(for_date=None):
     if rc_state in RC_FULL_DAYS or needs_yaale_veyavo(for_date):
         if rc_state in RC_FULL_DAYS:
             m_no_tach_note = "ר״ח"
+            yaale_note = rosh_chodesh_yaale_month_suffix(y, m, d, for_date)
         else:
             m_no_tach_note = yaale_vehavo_chag_reason(y, m, d)
+            yaale_note = m_no_tach_note
         mincha = [
             format_ain_tachanun(m_no_tach_note),
-            format_with_reason("יעלה ויבוא", m_no_tach_note),
+            format_with_reason("יעלה ויבוא", yaale_note),
         ]
 
     elif not is_special_day:
@@ -1532,18 +1560,20 @@ def build_message(for_date=None):
 
     arvit = []
 
-    if for_date.weekday() == 6:
+    if is_shabbat:
         if not say_vihi_noam(for_date):
             arvit.append(
                 format_with_reason("אין ויהי נעם", vihi_noam_omit_reason(for_date))
             )
 
     if rc_state == "erev":
-        arvit.append(format_with_reason("יעלה ויבוא", "ערב ר״ח"))
+        arvit.append(
+            format_with_reason("יעלה ויבוא", yaale_erev_rc_suffix(for_date))
+        )
 
     elif needs_yaale_veyavo(for_date):
         if rc_state in RC_FULL_DAYS:
-            yv_note = "ר״ח"
+            yv_note = rosh_chodesh_yaale_month_suffix(y, m, d, for_date)
         else:
             yv_note = yaale_vehavo_chag_reason(y, m, d)
         arvit.append(format_with_reason("יעלה ויבוא", yv_note))
