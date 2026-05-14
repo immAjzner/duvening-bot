@@ -822,8 +822,9 @@ def say_ledavid_hashem_arvit(for_date=None):
     return m == 6 or (m == 7 and d <= 20)
 
 # ===== TACHANUN =====
-def mincha_eve_omission_reason(y2, m2, d2):
-    """סיבה בהערת מנחה כשמחר (יום לועזי) הוא ערב יו״ט / ל״ג / וכו׳."""
+def mincha_eve_omission_reason(for_date, y2, m2, d2):
+    """סיבה בהערת מנחה כשמחר (יום לועזי) הוא ערב יו״ט / ל״ג / ערב שבת וכו׳."""
+    for_date = resolve_gregorian(for_date)
     if m2 == 2 and d2 == 18:
         return "ערב ל״ג בעומר"
     if is_yom_yerushalayim(m2, d2):
@@ -846,6 +847,9 @@ def mincha_eve_omission_reason(y2, m2, d2):
         return "ערב שבועות"
     if is_yom_haatzmaut(y2, m2, d2):
         return "ערב יום העצמאות"
+    tomorrow = for_date + timedelta(days=1)
+    if is_shabbat_date(tomorrow):
+        return "ערב שבת"
     return None
 
 
@@ -878,7 +882,7 @@ def calculate_tachanun(for_date=None):
         sh = "ארוך" if wd in [0, 3] else "רגיל"
         return sh, "לא", None, "ערב ר״ח"
 
-    eve_r = mincha_eve_omission_reason(y2, m2, d2)
+    eve_r = mincha_eve_omission_reason(for_date, y2, m2, d2)
     if eve_r:
         sh = "ארוך" if wd in [0, 3] else "רגיל"
         return sh, "לא", None, eve_r
@@ -910,6 +914,24 @@ def say_vihi_noam(for_date=None):
 
     return True
 
+
+def rosh_chodesh_header_name(y, m, d):
+    """כותרת ליום ר״ח: 'ראש חודש חשוון' וכו׳ — לא בראש השנה (נשאר 'ראש השנה')."""
+    if is_rosh_hashana(m, d):
+        return None
+    if d == 1:
+        return f"ראש חודש {hebrew_month_name(y, m)}"
+    if d == 30:
+        tomorrow_g = gregorian_from_hebrew(y, m, d) + timedelta(days=1)
+        y2, m2, d2 = hebrew_triple(tomorrow_g)
+        if d2 != 1:
+            return None
+        if is_rosh_hashana(m2, d2):
+            return None
+        return f"ראש חודש {hebrew_month_name(y2, m2)}"
+    return None
+
+
 def get_day_name(y, m, d):
     if is_pesach_sheni(m, d):
         return "פסח שני"
@@ -928,6 +950,10 @@ def get_day_name(y, m, d):
 
     if is_purim_day(y, m, d):
         return "פורים"
+
+    rc_hdr = rosh_chodesh_header_name(y, m, d)
+    if rc_hdr:
+        return rc_hdr
 
     if is_chanukah(m, d):
         return "חנוכה"
@@ -1109,7 +1135,11 @@ def insert_hallel_shacharit(shacharit, for_date):
     if "ברכי נפשי" in shacharit:
         shacharit.insert(shacharit.index("ברכי נפשי"), hl)
         return
-    yaale_idx = [i for i, x in enumerate(shacharit) if x == "יעלה ויבוא"]
+    yaale_idx = [
+        i
+        for i, x in enumerate(shacharit)
+        if x == "יעלה ויבוא" or x.startswith("יעלה ויבוא (")
+    ]
     if yaale_idx:
         shacharit.insert(yaale_idx[-1] + 1, hl)
         return
@@ -1434,7 +1464,8 @@ def build_message(for_date=None):
             shacharit.append("אין שינויים (והוא רחום)")
 
         else:
-            shacharit.append("אין שינויים")
+            if not hallel_shacharit_line(for_date):
+                shacharit.append("אין שינויים")
 
     insert_hallel_shacharit(shacharit, for_date)
 
@@ -1469,7 +1500,10 @@ def build_message(for_date=None):
             m_no_tach_note = "ר״ח"
         else:
             m_no_tach_note = yaale_vehavo_chag_reason(y, m, d)
-        mincha = [format_ain_tachanun(m_no_tach_note), "יעלה ויבוא"]
+        mincha = [
+            format_ain_tachanun(m_no_tach_note),
+            format_with_reason("יעלה ויבוא", m_no_tach_note),
+        ]
 
     elif not is_special_day:
         mincha = (
@@ -1505,10 +1539,14 @@ def build_message(for_date=None):
             )
 
     if rc_state == "erev":
-        arvit.append("יעלה ויבוא")
+        arvit.append(format_with_reason("יעלה ויבוא", "ערב ר״ח"))
 
     elif needs_yaale_veyavo(for_date):
-        arvit.append("יעלה ויבוא")
+        if rc_state in RC_FULL_DAYS:
+            yv_note = "ר״ח"
+        else:
+            yv_note = yaale_vehavo_chag_reason(y, m, d)
+        arvit.append(format_with_reason("יעלה ויבוא", yv_note))
 
     if omer:
         arvit.append(f"ספירת העומר: היום {omer+1} לעומר")
@@ -1560,6 +1598,11 @@ def build_message(for_date=None):
     parsha_line = get_shabbat_parsha_line(for_date)
     if parsha_line:
         msg += f"\n\n{parsha_line}"
+
+    mevarchim = shabbat_mevarchim_line(for_date)
+    if mevarchim:
+        msg += f"\n\n{mevarchim}"
+
     if is_aseret_yemei_teshuva(m, d):
         msg += "\n\n<b>עשרת ימי תשובה</b>"
     msg += f"\n\n{format_section('שחרית 🌅', shacharit)}"
@@ -1587,10 +1630,6 @@ def build_message(for_date=None):
     selichot = ashkenaz_selichot_line(for_date)
     if selichot:
         msg += f"\n\n{selichot}"
-
-    mevarchim = shabbat_mevarchim_line(for_date)
-    if mevarchim:
-        msg += f"\n\n{mevarchim}"
 
     greeting = get_greeting(y, m, d, for_date)
     if greeting:
@@ -1620,16 +1659,26 @@ def build_daily_digest(today=None):
     return msg
 
 
+def advance_after_digest_bundle(start_day):
+    """Next calendar day to use for preview after sending build_daily_digest(start_day)."""
+    d0 = resolve_gregorian(start_day)
+    last = d0
+    for d in multi_day_digest_dates(d0):
+        if d > last:
+            last = d
+    return last + timedelta(days=1)
+
+
 # ===== MAIN =====
 def main():
     poll_updates()
 
     force_n = parse_force_send_count()
     if force_n > 0:
-        start = today_jerusalem()
-        for k in range(force_n):
-            day = start + timedelta(days=k)
-            send(MY_CHAT_ID, build_daily_digest(day))
+        cursor = today_jerusalem()
+        for _ in range(force_n):
+            send(MY_CHAT_ID, build_daily_digest(cursor))
+            cursor = advance_after_digest_bundle(cursor)
         return
 
     if not should_send_now():
