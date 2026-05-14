@@ -732,6 +732,33 @@ def say_ledavid_hashem_arvit(for_date=None):
     return m == 6 or (m == 7 and d <= 20)
 
 # ===== TACHANUN =====
+def mincha_omits_tachanun_morning_digest_eve(y2, m2, d2):
+    """אין תחנון במנחה כש־״מחר״ (יום לועזי שלמחרת) הוא יום החג — הלילה כבר שייך אליו.
+
+    משתמשים ביום הלועזי הבא כקרוב ליום העברי שלאחרי היום — כמו ערב ל״ג, ערב יום ירושלים,
+    ערבי יו״ט. ערב ר״ח מטופל בנפרד דרך get_rosh_chodesh_state(…)== ״erev״.
+    """
+    if m2 == 2 and d2 == 18:
+        return True
+    if is_yom_yerushalayim(m2, d2):
+        return True
+    if is_purim_day(y2, m2, d2):
+        return True
+    if is_rosh_hashana(m2, d2):
+        return True
+    if is_yom_kippur(m2, d2):
+        return True
+    if is_pesach_first_day(m2, d2):
+        return True
+    if is_shavuot(m2, d2):
+        return True
+    if is_sukkot_yom_tov(m2, d2):
+        return True
+    if is_yom_haatzmaut(y2, m2, d2):
+        return True
+    return False
+
+
 def calculate_tachanun(for_date=None):
     for_date = resolve_gregorian(for_date)
 
@@ -742,7 +769,7 @@ def calculate_tachanun(for_date=None):
         return "לא", "לא"
 
     tomorrow = for_date + timedelta(days=1)
-    _, m2, d2 = hebrew_triple(tomorrow)
+    y2, m2, d2 = hebrew_triple(tomorrow)
 
     if m == 1 or m == 3:
         return "לא", "לא"
@@ -750,10 +777,13 @@ def calculate_tachanun(for_date=None):
     if m == 2 and d == 18:
         return "לא", "לא"
 
-    if (m2 == 2 and d2 == 18):
-        return ("ארוך" if wd in [0,3] else "רגיל"), "לא"
+    if (
+        mincha_omits_tachanun_morning_digest_eve(y2, m2, d2)
+        or get_rosh_chodesh_state(for_date) == "erev"
+    ):
+        return ("ארוך" if wd in [0, 3] else "רגיל"), "לא"
 
-    if wd in [0,3]:
+    if wd in [0, 3]:
         return "ארוך", "רגיל"
 
     return "רגיל", "רגיל"
