@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       force_send:
-        description: "0 = normal run. Positive integer (e.g. 3) = preview only to your chat: that many separate messages for consecutive days (day 0 .. N-1)."
+        description: "0 = normal run. N>0 = N preview messages to your chat only; after a Fri+Shabbat (or similar) bundle, the next message skips to the day after the bundle (not the next calendar day only)."
         required: false
         default: "0"
 
