@@ -271,6 +271,10 @@ def say_tzidkatcha(for_date=None):
     if not is_shabbat_date(for_date):
         return True
 
+    # Tzidkaticha is not said on erev Rosh Chodesh (even when tachanun would otherwise be said).
+    if get_rosh_chodesh_state(for_date) == "erev":
+        return False
+
     sh, _, _, _ = calculate_tachanun(for_date)
 
     return sh != "לא"
@@ -280,6 +284,8 @@ def tzidkatcha_omit_reason(for_date=None):
     for_date = resolve_gregorian(for_date)
     if not is_shabbat_date(for_date):
         return None
+    if get_rosh_chodesh_state(for_date) == "erev":
+        return "ערב ר״ח"
     sh_tach, _, sh_skip_note, _ = calculate_tachanun(for_date)
     if sh_tach == "לא":
         return sh_skip_note or "אין תחנון"
@@ -881,8 +887,12 @@ def calculate_tachanun(for_date=None):
     tomorrow = for_date + timedelta(days=1)
     y2, m2, d2 = hebrew_triple(tomorrow)
 
-    if m == 1 or m == 3:
-        note = "חודש ניסן" if m == 1 else "חודש סיון"
+    if m == 1:
+        note = "חודש ניסן"
+        return "לא", "לא", note, note
+    # Sivan: omit tachanun through 12 Sivan; from 13 Sivan tachanun is said (per common minhag here).
+    if m == 3 and d < 13:
+        note = "חודש סיון"
         return "לא", "לא", note, note
 
     if m == 2 and d == 18:
@@ -1487,7 +1497,15 @@ def build_message(for_date=None):
 
     is_special_day = is_shabbat or is_yomtov(m, d)
 
-    if rc_state in RC_FULL_DAYS:
+    if (
+        not is_special_day
+        and is_modern_israel_festivals(y, m, d)
+    ):
+        if is_yom_yerushalayim(m, d):
+            shacharit.append(format_ain_tachanun("יום ירושלים"))
+        else:
+            shacharit.append(format_ain_tachanun("יום העצמאות"))
+    elif rc_state in RC_FULL_DAYS:
         shacharit.append(
             format_ain_tachanun(rosh_chodesh_yaale_month_suffix(y, m, d, for_date))
         )
