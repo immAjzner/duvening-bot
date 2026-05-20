@@ -1493,6 +1493,21 @@ def mincha_header_line(y, m, d, is_shabbat):
     return None
 
 
+def is_regalim_opening_hebrew_date(m, d):
+    """First day of Pesach, Shavuot, or Sukkot — opening maariv of that regel."""
+    return is_pesach_first_day(m, d) or is_shavuot(m, d) or (m == 7 and d == 15)
+
+
+def arvit_header_line(for_date=None):
+    """Standalone Arvit label at the opening maariv of each regel (first night only)."""
+    for_date = resolve_gregorian(for_date)
+    evening = for_date + timedelta(days=1)
+    _, m, d = hebrew_triple(evening)
+    if is_regalim_opening_hebrew_date(m, d):
+        return "ערבית שלוש רגלים 🌙"
+    return None
+
+
 def short_kabbalat_shabbat_reason(for_date=None):
     """Parenthetical reason for abbreviated Kabbalat Shabbat (Friday between Mincha and Maariv).
 
@@ -1577,6 +1592,7 @@ def build_message(for_date=None):
     is_shabbat = is_shabbat_date(for_date)
     is_yt = is_yomtov(m, d)
     mincha_hdr = mincha_header_line(y, m, d, is_shabbat)
+    arvit_hdr = arvit_header_line(for_date)
 
     is_special_day = is_shabbat or is_yt
 
@@ -1687,42 +1703,44 @@ def build_message(for_date=None):
             mincha.append("נחמו")
 
     arvit = []
-    # Maariv reflects the next Hebrew date; Omer is counted at night (use evening date).
+    if not arvit_hdr:
+        # Maariv reflects the next Hebrew date; Omer is counted at night (use evening date).
+        if is_shabbat:
+            if not say_vihi_noam(for_date):
+                arvit.append(
+                    format_with_reason("אין ויהי נעם", vihi_noam_omit_reason(for_date))
+                )
 
-    if is_shabbat:
-        if not say_vihi_noam(for_date):
+        if rc_state == "erev":
             arvit.append(
-                format_with_reason("אין ויהי נעם", vihi_noam_omit_reason(for_date))
+                format_with_reason("יעלה ויבוא", yaale_erev_rc_suffix(for_date))
             )
 
-    if rc_state == "erev":
-        arvit.append(
-            format_with_reason("יעלה ויבוא", yaale_erev_rc_suffix(for_date))
-        )
+        elif needs_yaale_veyavo(arvit_evening_date):
+            y_a, m_a, d_a = hebrew_triple(arvit_evening_date)
+            rc_ar = get_rosh_chodesh_state(arvit_evening_date)
+            if rc_ar in RC_FULL_DAYS:
+                yv_note = rosh_chodesh_yaale_month_suffix(
+                    y_a, m_a, d_a, arvit_evening_date
+                )
+            else:
+                yv_note = yaale_vehavo_chag_reason(y_a, m_a, d_a)
+            arvit.append(format_with_reason("יעלה ויבוא", yv_note))
 
-    elif needs_yaale_veyavo(arvit_evening_date):
-        y_a, m_a, d_a = hebrew_triple(arvit_evening_date)
-        rc_ar = get_rosh_chodesh_state(arvit_evening_date)
-        if rc_ar in RC_FULL_DAYS:
-            yv_note = rosh_chodesh_yaale_month_suffix(y_a, m_a, d_a, arvit_evening_date)
-        else:
-            yv_note = yaale_vehavo_chag_reason(y_a, m_a, d_a)
-        arvit.append(format_with_reason("יעלה ויבוא", yv_note))
+        omer_arvit = calculate_omer(arvit_evening_date)
+        if omer_arvit:
+            arvit.append(f"ספירת העומר: היום {omer_arvit} לעומר")
 
-    omer_arvit = calculate_omer(arvit_evening_date)
-    if omer_arvit:
-        arvit.append(f"ספירת העומר: היום {omer_arvit} לעומר")
+        if needs_al_hanissim(y, m, d):
+            arvit.append("על הנסים")
 
-    if needs_al_hanissim(y, m, d):
-        arvit.append("על הנסים")
+        arvit.extend(arvit_hallel_leil_pesach_lines(for_date))
 
-    arvit.extend(arvit_hallel_leil_pesach_lines(for_date))
+        if say_ledavid_hashem_arvit(for_date):
+            arvit.append("לדוד ה׳")
 
-    if say_ledavid_hashem_arvit(for_date):
-        arvit.append("לדוד ה׳")
-
-    if not arvit:
-        arvit = ["אין שינויים"]
+        if not arvit:
+            arvit = ["אין שינויים"]
 
     musaf_extras = []
     has_musaf = (
@@ -1793,7 +1811,10 @@ def build_message(for_date=None):
     if kbs_reason:
         msg += f"\n\n{format_with_reason('קבלת שבת מקוצרת', kbs_reason)}"
 
-    msg += f"\n\n{format_section('ערבית 🌙', arvit)}"
+    if arvit_hdr:
+        msg += f"\n\n{arvit_hdr}"
+    else:
+        msg += f"\n\n{format_section('ערבית 🌙', arvit)}"
 
     selichot = ashkenaz_selichot_line(for_date)
     if selichot:
