@@ -275,8 +275,9 @@ def say_tzidkatcha(for_date=None):
     if get_rosh_chodesh_state(for_date) == "erev":
         return False
 
-    sh, _, _, _ = calculate_tachanun(for_date)
-
+    sh, _, sh_skip_note, _ = calculate_tachanun(for_date)
+    if sh == "לא" and sh_skip_note in ("חודש ניסן", "חודש סיון"):
+        return True
     return sh != "לא"
 
 
@@ -287,7 +288,7 @@ def tzidkatcha_omit_reason(for_date=None):
     if get_rosh_chodesh_state(for_date) == "erev":
         return "ערב ר״ח"
     sh_tach, _, sh_skip_note, _ = calculate_tachanun(for_date)
-    if sh_tach == "לא":
+    if sh_tach == "לא" and sh_skip_note not in ("חודש ניסן", "חודש סיון"):
         return sh_skip_note or "אין תחנון"
     return None
 
@@ -646,10 +647,10 @@ def say_av_harachamim(for_date=None):
         return True
 
     # ========= Base rule =========
-    # If no tachanun on a weekday — do not say Av Harachamim
+    # If no tachanun on a weekday — do not say Av Harachamim (except month-wide Nisan/Sivan rules).
 
-    sh, _, _, _ = calculate_tachanun(for_date)
-    if sh == "לא":
+    sh, _, sh_skip_note, _ = calculate_tachanun(for_date)
+    if sh == "לא" and sh_skip_note not in ("חודש ניסן", "חודש סיון"):
         return False
 
     # Shabbat Mevarchim
@@ -679,6 +680,9 @@ def say_av_harachamim(for_date=None):
     if m == 2 and d == 18:
         return False
 
+    if is_isru_chag(m, d):
+        return False
+
     # Erev chag (Pesach/Shavuos/R"H)
     tomorrow = for_date + timedelta(days=1)
     _, tomorrow_m, tomorrow_d = hebrew_triple(tomorrow)
@@ -694,7 +698,7 @@ def av_harachamim_omit_reason(for_date=None):
     for_date = resolve_gregorian(for_date)
     y, m, d = hebrew_triple(for_date)
     sh_tach, _, sh_skip_note, _ = calculate_tachanun(for_date)
-    if sh_tach == "לא":
+    if sh_tach == "לא" and sh_skip_note not in ("חודש ניסן", "חודש סיון"):
         return sh_skip_note or "אין תחנון"
     if is_shabbat_mevarchim(for_date) and m not in [2, 3]:
         return "שבת מברכים"
@@ -708,6 +712,8 @@ def av_harachamim_omit_reason(for_date=None):
         return "ט״ו בשבט"
     if m == 2 and d == 18:
         return "ל״ג בעומר"
+    if is_isru_chag(m, d):
+        return "איסרו חג"
     tomorrow = for_date + timedelta(days=1)
     _, tm, td = hebrew_triple(tomorrow)
     if is_yomtov(tm, td):
@@ -1080,6 +1086,14 @@ def is_hoshana_raba(m, d):
 def is_intermediate_moed_window_vihi(m, d):
     return is_moed_window_vihi_pesach_or_sukkot(m, d)
 
+def day_has_chag_greeting(y, m, d, for_date=None):
+    """True when a weekday digest would end with 'חג שמח!' (yom tov or named chag day)."""
+    for_date = resolve_gregorian(for_date)
+    if is_yomtov(m, d):
+        return True
+    return bool(get_day_name(y, m, d))
+
+
 def get_greeting(y, m, d, for_date=None):
     for_date = resolve_gregorian(for_date)
     wd = for_date.weekday()
@@ -1098,6 +1112,10 @@ def get_greeting(y, m, d, for_date=None):
         greeting = ""
 
     if wd == 5:  # Shabbat only
+        yesterday = for_date - timedelta(days=1)
+        y0, m0, d0 = hebrew_triple(yesterday)
+        if day_has_chag_greeting(y0, m0, d0, yesterday):
+            return "שבת שלום!"
         return f"שבת שלום ו{greeting}" if greeting else "שבת שלום!"
 
     return greeting
@@ -1560,7 +1578,11 @@ def build_message(for_date=None):
 
     if not is_special_day:
         if not has_lamenatzeach(y, m, d):
-            shacharit.append("אין למנצח")
+            shacharit.append(
+                format_with_reason(
+                    "אין למנצח", lamenatzeach_omit_reason(y, m, d)
+                )
+            )
 
     if is_shabbat:
         if not say_av_harachamim(for_date):
@@ -1647,7 +1669,7 @@ def build_message(for_date=None):
         arvit.append(format_with_reason("יעלה ויבוא", yv_note))
 
     if omer:
-        arvit.append(f"ספירת העומר: היום {omer+1} לעומר")
+        arvit.append(f"ספירת העומר: היום {omer} לעומר")
 
     if needs_al_hanissim(y, m, d):
         arvit.append("על הנסים")
