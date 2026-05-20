@@ -275,9 +275,7 @@ def say_tzidkatcha(for_date=None):
     if get_rosh_chodesh_state(for_date) == "erev":
         return False
 
-    sh, _, sh_skip_note, _ = calculate_tachanun(for_date)
-    if sh == "לא" and sh_skip_note in ("חודש ניסן", "חודש סיון"):
-        return True
+    sh, _, _, _ = calculate_tachanun(for_date)
     return sh != "לא"
 
 
@@ -288,7 +286,7 @@ def tzidkatcha_omit_reason(for_date=None):
     if get_rosh_chodesh_state(for_date) == "erev":
         return "ערב ר״ח"
     sh_tach, _, sh_skip_note, _ = calculate_tachanun(for_date)
-    if sh_tach == "לא" and sh_skip_note not in ("חודש ניסן", "חודש סיון"):
+    if sh_tach == "לא":
         return sh_skip_note or "אין תחנון"
     return None
 
@@ -1482,6 +1480,19 @@ def musaf_header_line(y, m, d, rc_state, is_shabbat):
     return "מוסף 🕍"
 
 
+def mincha_header_line(y, m, d, is_shabbat):
+    """Standalone Mincha label on regalim yom tov (like Musaf) — no detail lines."""
+    if is_shabbat or not is_yomtov(m, d):
+        return None
+    if (
+        is_pesach_yom_tov(m, d)
+        or is_shavuot(m, d)
+        or is_sukkot_yom_tov(m, d)
+    ):
+        return "מנחה שלוש רגלים 🌇"
+    return None
+
+
 def append_once(items, value):
     if value not in items:
         items.append(value)
@@ -1533,14 +1544,16 @@ def build_message(for_date=None):
         header += f" - <b>{day_name}</b>"
 
     sh_tach, min_tach, sh_skip_note, min_skip_note = calculate_tachanun(for_date)
-    omer = calculate_omer(for_date)
+    arvit_evening_date = for_date + timedelta(days=1)
 
     shacharit = []
 
     rc_state = get_rosh_chodesh_state(for_date)
     is_shabbat = is_shabbat_date(for_date)
+    is_yt = is_yomtov(m, d)
+    mincha_hdr = mincha_header_line(y, m, d, is_shabbat)
 
-    is_special_day = is_shabbat or is_yomtov(m, d)
+    is_special_day = is_shabbat or is_yt
 
     if (
         not is_special_day
@@ -1558,9 +1571,11 @@ def build_message(for_date=None):
         shacharit.append("ברכי נפשי")
 
     elif needs_yaale_veyavo(for_date):
-        shacharit.append(
-            format_ain_tachanun(yaale_vehavo_chag_reason(y, m, d))
-        )
+        # Yom tov: no "no tachanun" line — tachanun is never said on yom tov anyway.
+        if not is_yt:
+            shacharit.append(
+                format_ain_tachanun(yaale_vehavo_chag_reason(y, m, d))
+            )
         shacharit.append("יעלה ויבוא")
 
     elif not is_special_day:
@@ -1604,7 +1619,9 @@ def build_message(for_date=None):
     if say_ledavid_hashem(y, m, d):
         shacharit.append("לדוד ה׳")
 
-    if rc_state in RC_FULL_DAYS or needs_yaale_veyavo(for_date):
+    if mincha_hdr:
+        mincha = []
+    elif rc_state in RC_FULL_DAYS or needs_yaale_veyavo(for_date):
         if rc_state in RC_FULL_DAYS:
             yaale_note = rosh_chodesh_yaale_month_suffix(y, m, d, for_date)
             m_no_tach_note = yaale_note
@@ -1626,7 +1643,7 @@ def build_message(for_date=None):
     else:
         mincha = ["אין שינויים"]
 
-    if is_shabbat:
+    if is_shabbat and not mincha_hdr:
         if not say_tzidkatcha(for_date):
             if mincha == ["אין שינויים"]:
                 mincha = []
@@ -1634,19 +1651,18 @@ def build_message(for_date=None):
                 format_with_reason("אין צדקתך", tzidkatcha_omit_reason(for_date))
             )
 
-    if needs_al_hanissim(y, m, d):
-        mincha.append("על הנסים")
+    if not mincha_hdr:
+        if needs_al_hanissim(y, m, d):
+            mincha.append("על הנסים")
 
-    if is_public_fast_observed(for_date):
-        mincha.append("עננו ה׳ עננו")
+        if is_public_fast_observed(for_date):
+            mincha.append("עננו ה׳ עננו")
 
-    if is_tisha_bav_observed(for_date):
-        mincha.append("נחמו")
+        if is_tisha_bav_observed(for_date):
+            mincha.append("נחמו")
 
     arvit = []
-    # Maariv at the end of this civil calendar day typically reflects the next Hebrew date (e.g. no RC Yaaleh
-    # after a one-day Rosh Chodesh). Yaaleh lines below use for_date + 1 day for that reason.
-    arvit_evening_date = for_date + timedelta(days=1)
+    # Maariv reflects the next Hebrew date; Omer is counted at night (use evening date).
 
     if is_shabbat:
         if not say_vihi_noam(for_date):
@@ -1668,8 +1684,9 @@ def build_message(for_date=None):
             yv_note = yaale_vehavo_chag_reason(y_a, m_a, d_a)
         arvit.append(format_with_reason("יעלה ויבוא", yv_note))
 
-    if omer:
-        arvit.append(f"ספירת העומר: היום {omer} לעומר")
+    omer_arvit = calculate_omer(arvit_evening_date)
+    if omer_arvit:
+        arvit.append(f"ספירת העומר: היום {omer_arvit} לעומר")
 
     if needs_al_hanissim(y, m, d):
         arvit.append("על הנסים")
@@ -1731,7 +1748,10 @@ def build_message(for_date=None):
         if musaf_extras:
             msg += "\n" + "\n".join(musaf_extras)
 
-    msg += f"\n\n{format_section('מנחה 🌇', mincha)}"
+    if mincha_hdr:
+        msg += f"\n\n{mincha_hdr}"
+    else:
+        msg += f"\n\n{format_section('מנחה 🌇', mincha)}"
     mincha_zmanim = []
     if z_shkiah:
         mincha_zmanim.append(z_shkiah)
