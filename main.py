@@ -1493,6 +1493,31 @@ def mincha_header_line(y, m, d, is_shabbat):
     return None
 
 
+def short_kabbalat_shabbat_reason(for_date=None):
+    """Parenthetical reason for abbreviated Kabbalat Shabbat (Friday between Mincha and Maariv).
+
+    Only on Friday when today is yom tov or chol hamoed, or tomorrow is yom tov.
+    """
+    for_date = resolve_gregorian(for_date)
+    if for_date.weekday() != 4:
+        return None
+
+    y, m, d = hebrew_triple(for_date)
+
+    if is_chol_hamoed(m, d):
+        return yaale_vehavo_chag_reason(y, m, d)
+
+    if is_yomtov(m, d):
+        return get_day_name(y, m, d) or yaale_vehavo_chag_reason(y, m, d) or "יום טוב"
+
+    tomorrow = for_date + timedelta(days=1)
+    y2, m2, d2 = hebrew_triple(tomorrow)
+    if is_yomtov(m2, d2):
+        return mincha_eve_omission_reason(for_date, y2, m2, d2) or "ערב יום טוב"
+
+    return None
+
+
 def append_once(items, value):
     if value not in items:
         items.append(value)
@@ -1763,6 +1788,10 @@ def build_message(for_date=None):
         mincha_zmanim.append(f"צאת השבת:{nbsp}{havdalah_hhmm}")
     if mincha_zmanim:
         msg += "\n\n" + "\n".join(mincha_zmanim)
+
+    kbs_reason = short_kabbalat_shabbat_reason(for_date)
+    if kbs_reason:
+        msg += f"\n\n{format_with_reason('קבלת שבת מקוצרת', kbs_reason)}"
 
     msg += f"\n\n{format_section('ערבית 🌙', arvit)}"
 
