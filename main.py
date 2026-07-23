@@ -898,6 +898,9 @@ def calculate_tachanun(for_date=None):
     if is_tisha_bav_observed(for_date):
         return "לא", "לא", None, None
 
+    if is_purim_day(*hebrew_triple(for_date)):
+        return "לא", "לא", None, None
+
     if d == 1 or d == 30:
         note = "ר״ח"
         return "לא", "לא", note, note
@@ -1652,6 +1655,7 @@ def build_message(for_date=None):
 
     sh_tach, min_tach, sh_skip_note, min_skip_note = calculate_tachanun(for_date)
     arvit_evening_date = for_date + timedelta(days=1)
+    y_arvit, m_arvit, d_arvit = hebrew_triple(arvit_evening_date)
 
     shacharit = []
 
@@ -1715,7 +1719,7 @@ def build_message(for_date=None):
             )
 
     if needs_al_hanissim(y, m, d):
-        shacharit.append("על הנסים")
+        shacharit.append("על הניסים")
 
     shacharit_megillah = shacharit_megillah_line(for_date)
     if shacharit_megillah:
@@ -1779,7 +1783,7 @@ def build_message(for_date=None):
 
     if not mincha_hdr:
         if needs_al_hanissim(y, m, d):
-            mincha.append("על הנסים")
+            mincha.append("על הניסים")
 
         if is_public_fast_observed(for_date):
             mincha.append("עננו ה׳ עננו")
@@ -1810,22 +1814,21 @@ def build_message(for_date=None):
             )
 
         elif needs_yaale_veyavo(arvit_evening_date):
-            y_a, m_a, d_a = hebrew_triple(arvit_evening_date)
             rc_ar = get_rosh_chodesh_state(arvit_evening_date)
             if rc_ar in RC_FULL_DAYS:
                 yv_note = rosh_chodesh_yaale_month_suffix(
-                    y_a, m_a, d_a, arvit_evening_date
+                    y_arvit, m_arvit, d_arvit, arvit_evening_date
                 )
             else:
-                yv_note = yaale_vehavo_chag_reason(y_a, m_a, d_a)
+                yv_note = yaale_vehavo_chag_reason(y_arvit, m_arvit, d_arvit)
             arvit.append(format_with_reason("יעלה ויבוא", yv_note))
 
         omer_arvit = calculate_omer(arvit_evening_date)
         if omer_arvit:
             arvit.append(f"ספירת העומר: היום {omer_arvit} לעומר")
 
-        if needs_al_hanissim(y, m, d):
-            arvit.append("על הנסים")
+        if needs_al_hanissim(y_arvit, m_arvit, d_arvit):
+            arvit.append("על הניסים")
 
         arvit.extend(arvit_hallel_leil_pesach_lines(for_date))
 
@@ -1859,7 +1862,7 @@ def build_message(for_date=None):
         musaf_extras.append("הושענא רבה")
 
     if has_musaf and is_chanukah(m, d):
-        musaf_extras.append("על הנסים")
+        musaf_extras.append("על הניסים")
 
     if not shacharit:
         shacharit = ["אין שינויים"]
