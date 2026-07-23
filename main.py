@@ -895,6 +895,9 @@ def calculate_tachanun(for_date=None):
     wd = for_date.weekday()
     _, m, d = hebrew_triple(for_date)
 
+    if is_tisha_bav_observed(for_date):
+        return "לא", "לא", None, None
+
     if d == 1 or d == 30:
         note = "ר״ח"
         return "לא", "לא", note, note
@@ -1650,6 +1653,15 @@ def build_message(for_date=None):
             if not hallel_shacharit_line(for_date):
                 shacharit.append("אין שינויים")
 
+    if is_tisha_bav_observed(for_date):
+        shacharit.extend(
+            [
+                "אין טלית ותפילין",
+                "אין ״שיר של יום״",
+                "אין ״אין כאלוקינו״",
+            ]
+        )
+
     insert_hallel_shacharit(shacharit, for_date)
 
     if not is_special_day:
@@ -1675,7 +1687,10 @@ def build_message(for_date=None):
             append_once(shacharit, "אבינו מלכנו")
 
     if is_public_fast_observed(for_date) and not is_shabbat:
-        append_once(shacharit, "אבינו מלכנו")
+        if is_tisha_bav_observed(for_date):
+            append_once(shacharit, "אין ״אבינו מלכנו״")
+        else:
+            append_once(shacharit, "אבינו מלכנו")
 
     if say_ledavid_hashem(y, m, d):
         shacharit.append("לדוד ה׳")
@@ -1717,6 +1732,15 @@ def build_message(for_date=None):
     if not mincha_hdr:
         if needs_al_hanissim(y, m, d):
             mincha.append("על הנסים")
+
+        if is_tisha_bav_observed(for_date):
+            mincha.extend(
+                [
+                    "טלית ותפילין",
+                    "״שיר של יום״",
+                    "״אין כאלוקינו״",
+                ]
+            )
 
         if is_public_fast_observed(for_date):
             mincha.append("עננו ה׳ עננו")
