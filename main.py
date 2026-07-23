@@ -49,6 +49,17 @@ def parse_force_send_count():
     return n if n > 0 else 0
 
 
+def parse_preview_date():
+    """Optional ISO date for a manual preview sent only to MY_CHAT_ID."""
+    raw = (os.environ.get("PREVIEW_DATE") or "").strip()
+    if not raw:
+        return False, None
+    try:
+        return True, date.fromisoformat(raw)
+    except ValueError:
+        return True, None
+
+
 def is_manual_dispatch_run():
     """True when GitHub Actions workflow_dispatch sets MANUAL_RUN=1 (see daily.yml).
 
@@ -1538,6 +1549,15 @@ def append_once(items, value):
         items.append(value)
 
 
+def replace_no_changes_placeholder(items):
+    if len(items) <= 1:
+        return
+    if items[0] == "אין שינויים (והוא רחום)":
+        items[0] = "תחנון והוא רחום"
+    elif items[0] == "אין שינויים":
+        items.pop(0)
+
+
 def format_ain_tachanun(note=None):
     if note:
         return f"אין תחנון ({note})"
@@ -1660,6 +1680,8 @@ def build_message(for_date=None):
     if say_ledavid_hashem(y, m, d):
         shacharit.append("לדוד ה׳")
 
+    replace_no_changes_placeholder(shacharit)
+
     if mincha_hdr:
         mincha = []
     elif rc_state in RC_FULL_DAYS or needs_yaale_veyavo(for_date):
@@ -1701,6 +1723,8 @@ def build_message(for_date=None):
 
         if is_tisha_bav_observed(for_date):
             mincha.append("נחמו")
+
+    replace_no_changes_placeholder(mincha)
 
     arvit = []
     if not arvit_hdr:
@@ -1863,6 +1887,17 @@ def main():
     poll_updates()
 
     force_n = parse_force_send_count()
+    preview_date_provided, preview_date = parse_preview_date()
+    if preview_date_provided:
+        if preview_date is None:
+            print("PREVIEW_DATE must use YYYY-MM-DD format")
+            return
+        cursor = preview_date
+        for _ in range(force_n or 1):
+            send(MY_CHAT_ID, build_daily_digest(cursor))
+            cursor = advance_after_digest_bundle(cursor)
+        return
+
     if force_n > 0:
         cursor = today_jerusalem()
         for _ in range(force_n):
