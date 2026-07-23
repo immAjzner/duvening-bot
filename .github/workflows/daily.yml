@@ -5,8 +5,12 @@ on:
     - cron: '*/5 * * * *'
   workflow_dispatch:
     inputs:
+      preview_date:
+        description: "Optional preview date (YYYY-MM-DD). Sends only to MY_CHAT_ID; never broadcasts."
+        required: false
+        default: ""
       force_send:
-        description: "0 = normal run. N>0 = N preview messages to your chat only; after a Fri+Shabbat (or similar) bundle, the next message skips to the day after the bundle (not the next calendar day only)."
+        description: "With preview_date: number of preview messages (0 means 1). Without it: 0 = normal run, N>0 = N previews from today. Previews go only to MY_CHAT_ID."
         required: false
         default: "0"
 
@@ -31,5 +35,7 @@ jobs:
           # workflow_dispatch => MANUAL_RUN=1: full broadcast anytime (FORCE_SEND=0), no morning window / no "already today" skip.
           # schedule => MANUAL_RUN=0: once per civil day in the morning window using last_run.json
           MANUAL_RUN: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
+          # An optional date always takes the private preview path and never broadcasts.
+          PREVIEW_DATE: ${{ github.event.inputs.preview_date || '' }}
           # Scheduled runs have no workflow inputs; this falls back to 0. Manual runs use the value below (0, 1, 3, ...).
           FORCE_SEND: ${{ github.event.inputs.force_send || '0' }}
