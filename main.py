@@ -1458,8 +1458,8 @@ def _yeshiva_time_by_names_anywhere(payload, accepted_names):
     )
 
 
-def yeshiva_fast_zmanim_lines(for_date=None):
-    """Return explicit Yeshiva fast lines; never calculate missing values.
+def yeshiva_fast_zmanim_hhmm(for_date=None):
+    """Return explicit Yeshiva (start, end) times; never calculate missing values.
 
     Yeshiva attaches Tisha B'Av and Yom Kippur entrance/exit rows to the
     preceding civil day's page. Yom Kippur uses its holiday entrance/exit
@@ -1472,7 +1472,6 @@ def yeshiva_fast_zmanim_lines(for_date=None):
         else fast_date
     )
     p = yeshiva_day_payload(source_date)
-    nbsp = "\u00a0"
     is_yk = is_yom_kippur_date(fast_date)
     start_names = (
         YI_NAMES_FAST_START + YI_NAMES_YOM_KIPPUR_START
@@ -1485,13 +1484,18 @@ def yeshiva_fast_zmanim_lines(for_date=None):
         else YI_NAMES_FAST_END
     )
 
-    def line(label, names):
-        t = _yeshiva_time_by_names_anywhere(p, names)
-        return f"{label}:{nbsp}{t}" if t else ""
-
     return (
-        line("תחילת הצום", start_names),
-        line("צאת הצום", end_names),
+        _yeshiva_time_by_names_anywhere(p, start_names),
+        _yeshiva_time_by_names_anywhere(p, end_names),
+    )
+
+
+def yeshiva_fast_zmanim_lines(for_date=None):
+    start, end = yeshiva_fast_zmanim_hhmm(for_date)
+    nbsp = "\u00a0"
+    return (
+        f"תחילת הצום:{nbsp}{start}" if start else "",
+        f"צאת הצום:{nbsp}{end}" if end else "",
     )
 
 
@@ -1512,6 +1516,24 @@ def fast_zmanim_lines_for_message(for_date=None):
         evening_start, _ = yeshiva_fast_zmanim_lines(tomorrow)
 
     return morning_start, evening_start, fast_end
+
+
+def minor_fast_reminder_line(for_date=None):
+    tomorrow = resolve_gregorian(for_date) + timedelta(days=1)
+    if (
+        not is_public_fast_observed(tomorrow)
+        or is_previous_evening_fast(tomorrow)
+    ):
+        return ""
+
+    start, _ = yeshiva_fast_zmanim_hhmm(tomorrow)
+    fast_name = get_fast_name(tomorrow)
+    if not start or not fast_name:
+        return ""
+
+    if fast_name.startswith("צום "):
+        fast_name = fast_name[len("צום "):]
+    return f"תזכורת: מחר צום <b>{fast_name}</b> יתחיל בשעה {start}"
 
 
 def yeshiva_zmanim_lines(for_date=None):
@@ -1990,10 +2012,14 @@ def build_message(for_date=None):
     fast_start_morning, fast_start_evening, fast_end = (
         fast_zmanim_lines_for_message(for_date)
     )
+    fast_reminder = minor_fast_reminder_line(for_date)
     candles_hhmm, havdalah_hhmm = yeshiva_shabbat_candles_havdalah_hhmm(for_date)
     nbsp = "\u00a0"
 
     msg = f"{header} 📅"
+    if fast_start_morning:
+        msg += f"\n\n{fast_start_morning}"
+
     parsha_line = get_shabbat_parsha_line(for_date)
     if parsha_line:
         msg += f"\n\n{parsha_line}"
@@ -2005,8 +2031,6 @@ def build_message(for_date=None):
     if is_aseret_yemei_teshuva(m, d):
         msg += "\n\n<b>עשרת ימי תשובה</b>"
     msg += f"\n\n{format_section('שחרית 🌅', shacharit)}"
-    if fast_start_morning:
-        msg += f"\n\n{fast_start_morning}"
     if z_sof:
         msg += f"\n\n{z_sof}"
 
@@ -2051,6 +2075,9 @@ def build_message(for_date=None):
     greeting = get_greeting(y, m, d, for_date)
     if greeting:
         msg += f"\n\n{greeting}"
+
+    if fast_reminder:
+        msg += f"\n\n{fast_reminder}"
 
     return msg
 
