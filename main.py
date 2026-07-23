@@ -101,6 +101,10 @@ YI_NAMES_SOF_ZMAN_SHMA_GRA = (
 YI_NAMES_SHKIA = ("שקיעה",)
 YI_NAMES_TZEIT = ("צאת הכוכבים",)
 YI_NAMES_TSET_SHABBAT = ("צאת שבת", "יציאת שבת")
+YI_NAMES_FAST_START = ("כניסת הצום", "תחילת הצום")
+YI_NAMES_FAST_END = ("צאת הצום", "יציאת הצום", "סיום הצום")
+YI_NAMES_YOM_KIPPUR_START = ("כניסת החג", "כניסת יום כיפור")
+YI_NAMES_YOM_KIPPUR_END = ("צאת החג", "יציאת החג", "צאת יום כיפור")
 
 HEBREW_MONTH_NAMES = (
     "",
@@ -535,6 +539,19 @@ def is_public_fast_observed(for_date=None):
         or is_tisha_bav_observed(for_date)
         or is_taanit_esther_observed(for_date)
     )
+
+
+def is_yom_kippur_date(for_date=None):
+    _, m, d = hebrew_triple(for_date)
+    return is_yom_kippur(m, d)
+
+
+def is_fast_with_published_times(for_date=None):
+    return is_public_fast_observed(for_date) or is_yom_kippur_date(for_date)
+
+
+def is_previous_evening_fast(for_date=None):
+    return is_tisha_bav_observed(for_date) or is_yom_kippur_date(for_date)
 
 
 def say_avinu_malkeinu_on_public_fast(for_date=None):
@@ -1311,7 +1328,7 @@ def _norm_zman_title(s):
     s = _yeshiva_strip_html_fragment(s)
     s = re.sub(r"\s+", " ", s).strip()
     s = s.replace("״", '"').replace("\u201c", '"').replace("\u201d", '"')
-    return s
+    return s.rstrip(":：").strip()
 
 
 def _yeshiva_extract_time_pairs(html_fragment):
@@ -1432,6 +1449,69 @@ def _yeshiva_shabat_time_by_names(payload, accepted_names):
             if t:
                 return t
     return None
+
+
+def _yeshiva_time_by_names_anywhere(payload, accepted_names):
+    return (
+        _yeshiva_time_by_names(payload, accepted_names)
+        or _yeshiva_shabat_time_by_names(payload, accepted_names)
+    )
+
+
+def yeshiva_fast_zmanim_lines(for_date=None):
+    """Return explicit Yeshiva fast lines; never calculate missing values.
+
+    Yeshiva attaches Tisha B'Av and Yom Kippur entrance/exit rows to the
+    preceding civil day's page. Yom Kippur uses its holiday entrance/exit
+    labels on the site.
+    """
+    fast_date = resolve_gregorian(for_date)
+    source_date = (
+        fast_date - timedelta(days=1)
+        if is_previous_evening_fast(fast_date)
+        else fast_date
+    )
+    p = yeshiva_day_payload(source_date)
+    nbsp = "\u00a0"
+    is_yk = is_yom_kippur_date(fast_date)
+    start_names = (
+        YI_NAMES_FAST_START + YI_NAMES_YOM_KIPPUR_START
+        if is_yk
+        else YI_NAMES_FAST_START
+    )
+    end_names = (
+        YI_NAMES_FAST_END + YI_NAMES_YOM_KIPPUR_END
+        if is_yk
+        else YI_NAMES_FAST_END
+    )
+
+    def line(label, names):
+        t = _yeshiva_time_by_names_anywhere(p, names)
+        return f"{label}:{nbsp}{t}" if t else ""
+
+    return (
+        line("תחילת הצום", start_names),
+        line("צאת הצום", end_names),
+    )
+
+
+def fast_zmanim_lines_for_message(for_date=None):
+    """Return (morning start, evening start, end) for one civil-day message."""
+    for_date = resolve_gregorian(for_date)
+    morning_start = ""
+    evening_start = ""
+    fast_end = ""
+
+    if is_fast_with_published_times(for_date):
+        current_start, fast_end = yeshiva_fast_zmanim_lines(for_date)
+        if not is_previous_evening_fast(for_date):
+            morning_start = current_start
+
+    tomorrow = for_date + timedelta(days=1)
+    if is_previous_evening_fast(tomorrow):
+        evening_start, _ = yeshiva_fast_zmanim_lines(tomorrow)
+
+    return morning_start, evening_start, fast_end
 
 
 def yeshiva_zmanim_lines(for_date=None):
@@ -1907,6 +1987,9 @@ def build_message(for_date=None):
         shacharit = ["אין שינויים"]
 
     z_sof, z_shkiah, z_tzeit = yeshiva_zmanim_lines(for_date)
+    fast_start_morning, fast_start_evening, fast_end = (
+        fast_zmanim_lines_for_message(for_date)
+    )
     candles_hhmm, havdalah_hhmm = yeshiva_shabbat_candles_havdalah_hhmm(for_date)
     nbsp = "\u00a0"
 
@@ -1922,6 +2005,8 @@ def build_message(for_date=None):
     if is_aseret_yemei_teshuva(m, d):
         msg += "\n\n<b>עשרת ימי תשובה</b>"
     msg += f"\n\n{format_section('שחרית 🌅', shacharit)}"
+    if fast_start_morning:
+        msg += f"\n\n{fast_start_morning}"
     if z_sof:
         msg += f"\n\n{z_sof}"
 
@@ -1935,10 +2020,14 @@ def build_message(for_date=None):
     else:
         msg += f"\n\n{format_section('מנחה 🌇', mincha)}"
     mincha_zmanim = []
+    if fast_start_evening:
+        mincha_zmanim.append(fast_start_evening)
     if z_shkiah:
         mincha_zmanim.append(z_shkiah)
     if z_tzeit:
         mincha_zmanim.append(z_tzeit)
+    if fast_end:
+        mincha_zmanim.append(fast_end)
     if for_date.weekday() == 4 and candles_hhmm:
         mincha_zmanim.append(f"כניסת שבת:{nbsp}{candles_hhmm}")
     if is_shabbat and havdalah_hhmm:
