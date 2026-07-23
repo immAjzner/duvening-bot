@@ -1533,7 +1533,7 @@ def minor_fast_reminder_line(for_date=None):
 
     if fast_name.startswith("צום "):
         fast_name = fast_name[len("צום "):]
-    return f"תזכורת: מחר צום <b>{fast_name}</b> יתחיל בשעה {start}"
+    return f"⏰ תזכורת: מחר צום <b>{fast_name}</b> יתחיל בשעה {start}"
 
 
 def yeshiva_zmanim_lines(for_date=None):
@@ -2050,8 +2050,6 @@ def build_message(for_date=None):
         mincha_zmanim.append(z_shkiah)
     if z_tzeit:
         mincha_zmanim.append(z_tzeit)
-    if fast_end:
-        mincha_zmanim.append(fast_end)
     if for_date.weekday() == 4 and candles_hhmm:
         mincha_zmanim.append(f"כניסת שבת:{nbsp}{candles_hhmm}")
     if is_shabbat and havdalah_hhmm:
@@ -2067,6 +2065,9 @@ def build_message(for_date=None):
         msg += f"\n\n{arvit_hdr}"
     else:
         msg += f"\n\n{format_section('ערבית 🌙', arvit)}"
+
+    if fast_end:
+        msg += f"\n\n{fast_end}"
 
     selichot = ashkenaz_selichot_line(for_date)
     if selichot:
