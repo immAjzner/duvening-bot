@@ -883,9 +883,9 @@ def mincha_eve_omission_reason(for_date, y2, m2, d2):
         return "ערב שבועות"
     if is_yom_haatzmaut(y2, m2, d2):
         return "ערב יום העצמאות"
+    tomorrow = for_date + timedelta(days=1)
     if is_tisha_bav_observed(tomorrow):
         return "ערב תשעה באב"
-    tomorrow = for_date + timedelta(days=1)
     if is_shabbat_date(tomorrow):
         return "ערב שבת"
     return None
