@@ -1612,16 +1612,21 @@ def hebrew_date_range_has_shabbat(y, m, first_day, last_day):
 
 def festival_shabbat_megillah_line(for_date=None):
     for_date = resolve_gregorian(for_date)
-    if not is_shabbat_date(for_date):
-        return None
 
     y, m, d = hebrew_triple(for_date)
-    if m == 1 and 15 <= d <= 21:
-        if 16 <= d <= 20 or not hebrew_date_range_has_shabbat(y, m, 16, 20):
+
+    # שיר השירים: שבת חול המועד, ואם אין שבת בחוה"מ – שביעי של פסח.
+    if m == 1:
+        if is_shabbat_date(for_date) and 16 <= d <= 20:
+            return "מגילת שיר השירים"
+        if d == 21 and not hebrew_date_range_has_shabbat(y, m, 16, 20):
             return "מגילת שיר השירים"
 
-    if m == 7 and 15 <= d <= 21:
-        if 16 <= d <= 20 or not hebrew_date_range_has_shabbat(y, m, 16, 20):
+    # קהלת: שבת חול המועד, ואם אין שבת בחוה"מ – יום ראשון של סוכות.
+    if m == 7:
+        if is_shabbat_date(for_date) and 16 <= d <= 20:
+            return "מגילת קהלת"
+        if d == 15 and not hebrew_date_range_has_shabbat(y, m, 16, 20):
             return "מגילת קהלת"
 
     return None
