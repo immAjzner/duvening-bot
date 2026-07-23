@@ -1742,7 +1742,7 @@ def build_message(for_date=None):
 
     if is_tisha_bav:
         shacharit = [
-            "ללא:",
+            "<b>ללא:</b>",
             "טלית ותפילין",
             "אבינו מלכנו",
             "תחנון",
