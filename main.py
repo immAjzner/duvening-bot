@@ -1594,6 +1594,50 @@ def yaale_vehavo_chag_reason(y, m, d):
     return "חג"
 
 
+def hebrew_date_range_has_shabbat(y, m, first_day, last_day):
+    return any(
+        gregorian_from_hebrew(y, m, day).weekday() == 5
+        for day in range(first_day, last_day + 1)
+    )
+
+
+def festival_shabbat_megillah_line(for_date=None):
+    for_date = resolve_gregorian(for_date)
+    if not is_shabbat_date(for_date):
+        return None
+
+    y, m, d = hebrew_triple(for_date)
+    if m == 1 and 15 <= d <= 21:
+        if 16 <= d <= 20 or not hebrew_date_range_has_shabbat(y, m, 16, 20):
+            return "מגילת שיר השירים"
+
+    if m == 7 and 15 <= d <= 21:
+        if 16 <= d <= 20 or not hebrew_date_range_has_shabbat(y, m, 16, 20):
+            return "מגילת קהלת"
+
+    return None
+
+
+def shacharit_megillah_line(for_date=None):
+    for_date = resolve_gregorian(for_date)
+    y, m, d = hebrew_triple(for_date)
+    if is_purim_day(y, m, d):
+        return "מגילת אסתר"
+    if is_shavuot(m, d):
+        return "מגילת רות"
+    return festival_shabbat_megillah_line(for_date)
+
+
+def arvit_megillah_line(for_date=None):
+    evening_date = resolve_gregorian(for_date) + timedelta(days=1)
+    y, m, d = hebrew_triple(evening_date)
+    if is_purim_day(y, m, d):
+        return "מגילת אסתר"
+    if is_tisha_bav_observed(evening_date):
+        return "מגילת איכה"
+    return None
+
+
 # ===== MESSAGE =====
 def build_message(for_date=None):
     for_date = resolve_gregorian(for_date)
@@ -1672,6 +1716,10 @@ def build_message(for_date=None):
 
     if needs_al_hanissim(y, m, d):
         shacharit.append("על הנסים")
+
+    shacharit_megillah = shacharit_megillah_line(for_date)
+    if shacharit_megillah:
+        shacharit.append(shacharit_megillah)
 
     if is_aseret_yemei_teshuva(m, d):
         append_once(shacharit, "שיר המעלות ממעמקים")
@@ -1780,6 +1828,10 @@ def build_message(for_date=None):
             arvit.append("על הנסים")
 
         arvit.extend(arvit_hallel_leil_pesach_lines(for_date))
+
+        arvit_megillah = arvit_megillah_line(for_date)
+        if arvit_megillah:
+            arvit.append(arvit_megillah)
 
         if say_ledavid_hashem_arvit(for_date):
             arvit.append("לדוד ה׳")
