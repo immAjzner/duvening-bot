@@ -9,6 +9,13 @@ from zoneinfo import ZoneInfo
 from convertdate import hebrew
 from pyluach import dates, parshios
 
+# ============================================================================
+# NOTE TO CONTRIBUTORS:
+# All source-code comments in this file must be written in English only.
+# Do not add Hebrew comments.
+# ============================================================================
+
+
 # ===== CONFIG =====
 TOKEN = os.environ["BOT_TOKEN"]
 BASE_URL = f"https://api.telegram.org/bot{TOKEN}"
@@ -1039,6 +1046,9 @@ def get_day_name(y, m, d):
     if is_yom_kippur(m, d):
         return "יום כיפור"
 
+    if is_pesach_seventh_day(m, d):
+        return "שביעי של פסח"
+
     if is_pesach_from_first_day(m, d):
         return "פסח"
 
@@ -1589,7 +1599,7 @@ def yaale_vehavo_chag_reason(y, m, d):
             return "פסח"
         if is_chol_hamoed_pesach(m, d):
             return "חוה״מ פסח"
-        return "חול הפסח"
+        return "חוה״מ פסח"
     if is_shavuot(m, d):
         return "שבועות"
     if is_hoshana_raba(m, d):
@@ -1615,14 +1625,14 @@ def festival_shabbat_megillah_line(for_date=None):
 
     y, m, d = hebrew_triple(for_date)
 
-    # שיר השירים: שבת חול המועד, ואם אין שבת בחוה"מ – שביעי של פסח.
+    # Song of Songs: Shabbat Chol HaMoed; if there is no Shabbat during Chol HaMoed, read on the seventh day of Pesach.
     if m == 1:
         if is_shabbat_date(for_date) and 16 <= d <= 20:
             return "מגילת שיר השירים"
         if d == 21 and not hebrew_date_range_has_shabbat(y, m, 16, 20):
             return "מגילת שיר השירים"
 
-    # קהלת: שבת חול המועד, ואם אין שבת בחוה"מ – יום ראשון של סוכות.
+    # Ecclesiastes: Shabbat Chol HaMoed; if there is no Shabbat during Chol HaMoed, read on the first day of Sukkot.
     if m == 7:
         if is_shabbat_date(for_date) and 16 <= d <= 20:
             return "מגילת קהלת"
@@ -1997,7 +2007,7 @@ def main():
         if preview_date is None:
             print("PREVIEW_DATE must use YYYY-MM-DD format")
             return
-        cursor = preview_date
+        cursor = advance_after_digest_bundle(cursor)
         for _ in range(force_n or 1):
             send(MY_CHAT_ID, build_daily_digest(cursor))
             cursor = advance_after_digest_bundle(cursor)
