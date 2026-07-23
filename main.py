@@ -1936,6 +1936,8 @@ def build_message(for_date=None):
                 "אין כאלוקינו",
                 "נחם",
                 "עננו ה׳ עננו",
+                "אין תחנון",
+                "אין אבינו מלכנו",
             ]
 
     replace_no_changes_placeholder(mincha)
