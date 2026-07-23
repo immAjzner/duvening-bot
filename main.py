@@ -1614,6 +1614,7 @@ def build_message(for_date=None):
     rc_state = get_rosh_chodesh_state(for_date)
     is_shabbat = is_shabbat_date(for_date)
     is_yt = is_yomtov(m, d)
+    is_tisha_bav = is_tisha_bav_observed(for_date)
     mincha_hdr = mincha_header_line(y, m, d, is_shabbat)
     arvit_hdr = arvit_header_line(for_date)
 
@@ -1653,15 +1654,6 @@ def build_message(for_date=None):
             if not hallel_shacharit_line(for_date):
                 shacharit.append("אין שינויים")
 
-    if is_tisha_bav_observed(for_date):
-        shacharit.extend(
-            [
-                "אין טלית ותפילין",
-                "אין ״שיר של יום״",
-                "אין ״אין כאלוקינו״",
-            ]
-        )
-
     insert_hallel_shacharit(shacharit, for_date)
 
     if not is_special_day:
@@ -1687,13 +1679,21 @@ def build_message(for_date=None):
             append_once(shacharit, "אבינו מלכנו")
 
     if is_public_fast_observed(for_date) and not is_shabbat:
-        if is_tisha_bav_observed(for_date):
-            append_once(shacharit, "אין ״אבינו מלכנו״")
-        else:
+        if not is_tisha_bav:
             append_once(shacharit, "אבינו מלכנו")
 
     if say_ledavid_hashem(y, m, d):
         shacharit.append("לדוד ה׳")
+
+    if is_tisha_bav:
+        shacharit = [
+            "אין טלית ותפילין",
+            "אין אבינו מלכנו",
+            "אין תחנון",
+            "אין למנצח (תשעה באב)",
+            "אין שיר של יום",
+            "אין ״אין כאלוקינו״",
+        ]
 
     replace_no_changes_placeholder(shacharit)
 
@@ -1733,20 +1733,17 @@ def build_message(for_date=None):
         if needs_al_hanissim(y, m, d):
             mincha.append("על הנסים")
 
-        if is_tisha_bav_observed(for_date):
-            mincha.extend(
-                [
-                    "טלית ותפילין",
-                    "״שיר של יום״",
-                    "״אין כאלוקינו״",
-                ]
-            )
-
         if is_public_fast_observed(for_date):
             mincha.append("עננו ה׳ עננו")
 
-        if is_tisha_bav_observed(for_date):
-            mincha.append("נחמו")
+        if is_tisha_bav:
+            mincha = [
+                "טלית ותפילין",
+                "שיר של יום",
+                "אין כאלוקינו",
+                "נחם",
+                "עננו ה׳ עננו",
+            ]
 
     replace_no_changes_placeholder(mincha)
 
