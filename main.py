@@ -530,6 +530,10 @@ def is_public_fast_observed(for_date=None):
     )
 
 
+def say_avinu_malkeinu_on_public_fast(for_date=None):
+    return is_public_fast_observed(for_date) and not is_tisha_bav_observed(for_date)
+
+
 def get_fast_name(for_date=None):
     if is_tzom_gedaliah_observed(for_date):
         return "צום גדליה"
@@ -1730,9 +1734,8 @@ def build_message(for_date=None):
         if not is_shabbat:
             append_once(shacharit, "אבינו מלכנו")
 
-    if is_public_fast_observed(for_date) and not is_shabbat:
-        if not is_tisha_bav:
-            append_once(shacharit, "אבינו מלכנו")
+    if say_avinu_malkeinu_on_public_fast(for_date) and not is_shabbat:
+        append_once(shacharit, "אבינו מלכנו")
 
     if say_ledavid_hashem(y, m, d):
         shacharit.append("לדוד ה׳")
@@ -1787,6 +1790,8 @@ def build_message(for_date=None):
 
         if is_public_fast_observed(for_date):
             mincha.append("עננו ה׳ עננו")
+            if say_avinu_malkeinu_on_public_fast(for_date):
+                mincha.append("אבינו מלכנו")
 
         if is_tisha_bav:
             mincha = [
