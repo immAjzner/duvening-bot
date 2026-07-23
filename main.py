@@ -1742,12 +1742,20 @@ def build_message(for_date=None):
 
     if is_tisha_bav:
         shacharit = [
-            "אין טלית ותפילין",
-            "אין אבינו מלכנו",
-            "אין תחנון",
-            "אין למנצח",
-            "אין שיר של יום",
-            "אין ״אין כאלוקינו״",
+            "ללא:",
+            "טלית ותפילין",
+            "אבינו מלכנו",
+            "תחנון",
+            "למנצח",
+            "שיר של יום",
+            "״אין כאלוקינו״",
+        ]
+
+    if is_shabbat:
+        shacharit = [
+            line
+            for line in shacharit
+            if line != "אין תחנון" and not line.startswith("אין תחנון (")
         ]
 
     replace_no_changes_placeholder(shacharit)
@@ -1775,6 +1783,15 @@ def build_message(for_date=None):
 
     else:
         mincha = ["אין שינויים"]
+
+    if is_shabbat:
+        mincha = [
+            line
+            for line in mincha
+            if line != "אין תחנון" and not line.startswith("אין תחנון (")
+        ]
+        if not mincha:
+            mincha = ["אין שינויים"]
 
     if is_shabbat and not mincha_hdr:
         if not say_tzidkatcha(for_date):
