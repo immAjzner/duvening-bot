@@ -2007,10 +2007,10 @@ def main():
         if preview_date is None:
             print("PREVIEW_DATE must use YYYY-MM-DD format")
             return
-        cursor = advance_after_digest_bundle(cursor)
+        cursor = preview_date
         for _ in range(force_n or 1):
             send(MY_CHAT_ID, build_daily_digest(cursor))
-            cursor = advance_after_digest_bundle(cursor)
+            cursor = cursor + timedelta(days=1)
         return
 
     if force_n > 0:
