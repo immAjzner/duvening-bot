@@ -162,6 +162,18 @@ def is_purim_day(y, m, d):
     return m == 12
 
 
+def is_shushan_purim_day(y, m, d):
+    if d != 15:
+        return False
+    if is_hebrew_leap_year(y):
+        return m == 13
+    return m == 12
+
+
+def is_purim_katan_day(y, m, d):
+    return is_hebrew_leap_year(y) and m == 12 and d in (14, 15)
+
+
 # ===== GITHUB =====
 def get_file(path):
     url = f"https://api.github.com/repos/{REPO}/contents/{path}"
@@ -293,23 +305,17 @@ def say_tzidkatcha(for_date=None):
     if not is_shabbat_date(for_date):
         return True
 
-    # Tzidkaticha is not said on erev Rosh Chodesh (even when tachanun would otherwise be said).
-    if get_rosh_chodesh_state(for_date) == "erev":
-        return False
-
-    sh, _, _, _ = calculate_tachanun(for_date)
-    return sh != "לא"
+    _, mincha, _, _ = calculate_tachanun(for_date)
+    return mincha != "לא"
 
 
 def tzidkatcha_omit_reason(for_date=None):
     for_date = resolve_gregorian(for_date)
     if not is_shabbat_date(for_date):
         return None
-    if get_rosh_chodesh_state(for_date) == "erev":
-        return "ערב ר״ח"
-    sh_tach, _, sh_skip_note, _ = calculate_tachanun(for_date)
-    if sh_tach == "לא":
-        return sh_skip_note or "אין תחנון"
+    _, min_tach, _, min_skip_note = calculate_tachanun(for_date)
+    if min_tach == "לא":
+        return min_skip_note or "אין תחנון"
     return None
 
 
@@ -379,6 +385,10 @@ def shabbat_mevarchim_line(for_date=None):
 # ===== HOLIDAYS =====
 def is_rosh_hashana(m, d):
     return m == 7 and d in (1, 2)
+
+
+def is_erev_rosh_hashana(m, d):
+    return m == 6 and d == 29
 
 
 def is_yom_kippur(m, d):
@@ -882,9 +892,58 @@ def say_ledavid_hashem_arvit(for_date=None):
     return m == 6 or (m == 7 and d <= 20)
 
 # ===== TACHANUN =====
+def tachanun_day_omission_reason(for_date=None):
+    """Reason Tachanun is omitted for the full civil day's prayers."""
+    for_date = resolve_gregorian(for_date)
+    y, m, d = hebrew_triple(for_date)
+
+    if d == 1 or d == 30:
+        return "ר״ח"
+    if is_yomtov(m, d):
+        return get_day_name(y, m, d) or "יום טוב"
+    if is_tisha_bav_observed(for_date):
+        return "תשעה באב"
+    if is_erev_rosh_hashana(m, d):
+        return "ערב ראש השנה"
+    if is_erev_yom_kippur(m, d):
+        return "ערב יום כיפור"
+    if is_purim_day(y, m, d):
+        return "פורים"
+    if is_shushan_purim_day(y, m, d):
+        return "שושן פורים"
+    if is_purim_katan_day(y, m, d):
+        return "פורים קטן"
+    if is_chanukah(m, d):
+        return "חנוכה"
+    if m == 1:
+        return "חודש ניסן"
+    if is_pesach_sheni(m, d):
+        return "פסח שני"
+    if m == 2 and d == 18:
+        return "ל״ג בעומר"
+    if m == 3 and d < 13:
+        return "חודש סיון"
+    if is_tu_bav(m, d):
+        return "ט״ו באב"
+    if is_tu_bishvat(m, d):
+        return "ט״ו בשבט"
+    if m == 7 and d >= 11:
+        return "חודש תשרי"
+    if is_isru_chag(m, d):
+        return "איסרו חג"
+    if is_modern_israel_festivals(y, m, d):
+        return "יום העצמאות" if is_yom_haatzmaut(y, m, d) else "יום ירושלים"
+    return None
+
+
 def mincha_eve_omission_reason(for_date, y2, m2, d2):
     """Mincha footnote when the next civil day is erev Yom Tov / Lag BaOmer / erev Shabbat, etc."""
     for_date = resolve_gregorian(for_date)
+    # On 28 Elul and 8 Tishrei, Tachanun is still said at Mincha. On Erev Rosh
+    # Hashanah (29 Elul) and Erev Yom Kippur (9 Tishrei), the full-day rule above
+    # omits Tachanun at both Shacharit and Mincha.
+    if is_erev_rosh_hashana(m2, d2) or is_erev_yom_kippur(m2, d2):
+        return None
     if m2 == 2 and d2 == 18:
         return "ערב ל״ג בעומר"
     if is_yom_yerushalayim(m2, d2):
@@ -912,6 +971,9 @@ def mincha_eve_omission_reason(for_date, y2, m2, d2):
         return "ערב תשעה באב"
     if is_shabbat_date(tomorrow):
         return "ערב שבת"
+    tomorrow_reason = tachanun_day_omission_reason(tomorrow)
+    if tomorrow_reason:
+        return f"ערב {tomorrow_reason}"
     return None
 
 
@@ -923,32 +985,12 @@ def calculate_tachanun(for_date=None):
     for_date = resolve_gregorian(for_date)
 
     wd = for_date.weekday()
-    _, m, d = hebrew_triple(for_date)
-
-    if is_tisha_bav_observed(for_date):
-        return "לא", "לא", None, None
-
-    if is_purim_day(*hebrew_triple(for_date)):
-        return "לא", "לא", None, None
-
-    if d == 1 or d == 30:
-        note = "ר״ח"
-        return "לא", "לא", note, note
+    day_reason = tachanun_day_omission_reason(for_date)
+    if day_reason:
+        return "לא", "לא", day_reason, day_reason
 
     tomorrow = for_date + timedelta(days=1)
     y2, m2, d2 = hebrew_triple(tomorrow)
-
-    if m == 1:
-        note = "חודש ניסן"
-        return "לא", "לא", note, note
-    # Sivan: omit tachanun through 12 Sivan; from 13 Sivan tachanun is said (per common minhag here).
-    if m == 3 and d < 13:
-        note = "חודש סיון"
-        return "לא", "לא", note, note
-
-    if m == 2 and d == 18:
-        note = "ל״ג בעומר"
-        return "לא", "לא", note, note
 
     if get_rosh_chodesh_state(for_date) == "erev":
         sh = "ארוך" if wd in [0, 3] else "רגיל"
