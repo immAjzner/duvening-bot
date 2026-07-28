@@ -380,7 +380,7 @@ def shabbat_mevarchim_line(for_date=None):
     else:
         days_text = "בימים " + "-".join(weekdays)
 
-    return f"שבת מברכים - ר״ח {month_name} יהיה {days_text}"
+    return f"ר״ח {month_name} יהיה {days_text}"
 
 # ===== HOLIDAYS =====
 def is_rosh_hashana(m, d):
@@ -768,11 +768,11 @@ def av_harachamim_omit_reason(for_date=None):
     return "כללים"
 
 
-def is_four_parshiyot(for_date=None):
+def four_parshiyot_name(for_date=None):
     for_date = resolve_gregorian(for_date)
 
     if not is_shabbat_date(for_date):
-        return False
+        return None
 
     hdate = dates.GregorianDate(for_date.year, for_date.month, for_date.day).to_heb()
     hy = hdate.year
@@ -797,7 +797,17 @@ def is_four_parshiyot(for_date=None):
     hachodesh = shabbat_on_or_before(rc_nisan)
     parah = hachodesh - 7
 
-    return hdate in (shekalim, zachor, parah, hachodesh)
+    names_by_date = (
+        (shekalim, "שבת שקלים"),
+        (zachor, "שבת זכור"),
+        (parah, "שבת פרה"),
+        (hachodesh, "שבת החודש"),
+    )
+    return next((name for special_date, name in names_by_date if hdate == special_date), None)
+
+
+def is_four_parshiyot(for_date=None):
+    return four_parshiyot_name(for_date) is not None
 
 # ===== Lamenatzeach (intro psalm) =====
 def has_lamenatzeach(y, m, d):
@@ -1149,6 +1159,16 @@ def vihi_noam_omit_reason(for_date=None):
 
 def is_chanukah(m, d):
     return (m == 9 and d >= 25) or (m == 10 and d <= 2)
+
+
+def is_chanukah_date(for_date=None):
+    """All eight Chanukah days, including 3 Tevet when Kislev has 29 days."""
+    for_date = resolve_gregorian(for_date)
+    y, m, _ = hebrew_triple(for_date)
+    if m not in (9, 10):
+        return False
+    first_day = gregorian_from_hebrew(y, 9, 25)
+    return 0 <= (for_date - first_day).days <= 7
 
 
 def needs_al_hanissim(y, m, d):
@@ -1607,25 +1627,92 @@ def yeshiva_shabbat_candles_havdalah_hhmm(for_date=None):
     )
 
 
-def get_shabbat_parsha_line(for_date):
+def get_shabbat_parsha_parts(for_date=None):
+    for_date = resolve_gregorian(for_date)
     if not is_shabbat_date(for_date):
-        return None
-
-    _, m, d = hebrew_triple(for_date)
-    if is_chol_hamoed_pesach(m, d):
-        return "שבת חוה״מ <b>פסח</b>"
-    if is_chol_hamoed_sukkot(m, d):
-        return "שבת חוה״מ <b>סוכות</b>"
+        return []
 
     hdate = dates.GregorianDate(for_date.year, for_date.month, for_date.day).to_heb()
     parsha = parshios.getparsha_string(hdate, hebrew=True, israel=True)
     if not parsha:
+        return []
+
+    return [part.strip() for part in parsha.split(",") if part.strip()]
+
+
+def get_shabbat_parsha_line(for_date):
+    parts = get_shabbat_parsha_parts(for_date)
+    if not parts:
         return None
 
-    parts = [p.strip() for p in parsha.split(",") if p.strip()]
     if len(parts) >= 2:
         return f"פרשות השבוע: <b>{'-'.join(parts)}</b>"
     return f"פרשת השבוע: <b>{parts[0]}</b>"
+
+
+def special_shabbat_header_names(for_date=None):
+    """Named Shabbatot shown in the message header, including overlapping names."""
+    for_date = resolve_gregorian(for_date)
+    if not is_shabbat_date(for_date):
+        return []
+
+    y, m, d = hebrew_triple(for_date)
+    parsha_parts = get_shabbat_parsha_parts(for_date)
+    names = []
+
+    if m == 7 and 3 <= d <= 9:
+        names.append("שבת שובה")
+
+    if "בראשית" in parsha_parts:
+        names.append("שבת בראשית")
+
+    if is_chanukah_date(for_date):
+        names.append("שבת חנוכה")
+
+    if "בשלח" in parsha_parts:
+        names.append("שבת שירה")
+
+    four_parshiyot = four_parshiyot_name(for_date)
+    if four_parshiyot:
+        names.append(four_parshiyot)
+
+    if m == 1 and 8 <= d <= 14:
+        names.append("שבת הגדול")
+
+    tisha_bav = gregorian_from_hebrew(y, 5, 9)
+    days_before_tisha_bav = (tisha_bav - for_date).days
+    if 0 <= days_before_tisha_bav <= 6:
+        names.append("שבת חזון")
+
+    days_after_tisha_bav = (for_date - tisha_bav).days
+    if 1 <= days_after_tisha_bav <= 7:
+        names.append("שבת נחמו")
+
+    # Israel calendar: Chol HaMoed begins on 16 Nisan / 16 Tishrei.
+    if m == 1 and 16 <= d <= 20:
+        names.append("שבת חוה״מ פסח")
+    elif m == 7 and 16 <= d <= 20:
+        names.append("שבת חוה״מ סוכות")
+
+    rosh_chodesh_name = rosh_chodesh_header_name(y, m, d)
+    if rosh_chodesh_name:
+        names.append(f"שבת {rosh_chodesh_name}")
+
+    tomorrow = for_date + timedelta(days=1)
+    _, tomorrow_hebrew_month, tomorrow_hebrew_day = hebrew_triple(tomorrow)
+    if (
+        tomorrow_hebrew_day in (1, 30)
+        and not is_rosh_hashana(tomorrow_hebrew_month, tomorrow_hebrew_day)
+        and not rosh_chodesh_name
+        and not four_parshiyot
+        and not is_chanukah_date(for_date)
+    ):
+        names.append("שבת מחר חודש")
+
+    if is_shabbat_mevarchim(for_date):
+        names.append("שבת מברכים")
+
+    return names
 
 
 def format_section(name, items):
@@ -1818,8 +1905,14 @@ def build_message(for_date=None):
     y, m, d = hebrew_triple(for_date)
 
     day_name = get_day_name(y, m, d) or get_fast_name(for_date)
-    if day_name:
-        header += f" - <b>{day_name}</b>"
+    header_names = special_shabbat_header_names(for_date)
+    if day_name and not any(
+        name == day_name or name.endswith(f" {day_name}")
+        for name in header_names
+    ):
+        header_names.append(day_name)
+    if header_names:
+        header += " - " + " - ".join(f"<b>{name}</b>" for name in header_names)
 
     sh_tach, min_tach, sh_skip_note, min_skip_note = calculate_tachanun(for_date)
     arvit_evening_date = for_date + timedelta(days=1)
