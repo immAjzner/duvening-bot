@@ -939,10 +939,8 @@ def tachanun_day_omission_reason(for_date=None):
 def mincha_eve_omission_reason(for_date, y2, m2, d2):
     """Mincha footnote when the next civil day is erev Yom Tov / Lag BaOmer / erev Shabbat, etc."""
     for_date = resolve_gregorian(for_date)
-    # On 28 Elul and 8 Tishrei, Tachanun is still said at Mincha. On Erev Rosh
-    # Hashanah (29 Elul) and Erev Yom Kippur (9 Tishrei), the full-day rule above
-    # omits Tachanun at both Shacharit and Mincha.
-    if is_erev_rosh_hashana(m2, d2) or is_erev_yom_kippur(m2, d2):
+    # Tachanun is said at Mincha on 13 Iyar, the day before Pesach Sheni.
+    if is_pesach_sheni(m2, d2):
         return None
     if m2 == 2 and d2 == 18:
         return "ערב ל״ג בעומר"
@@ -987,6 +985,11 @@ def calculate_tachanun(for_date=None):
     wd = for_date.weekday()
     day_reason = tachanun_day_omission_reason(for_date)
     if day_reason:
+        # Although Tachanun is omitted at Shacharit, it is said at Mincha on
+        # the day before Rosh Hashanah and the day before Yom Kippur.
+        y, m, d = hebrew_triple(for_date)
+        if is_erev_rosh_hashana(m, d) or is_erev_yom_kippur(m, d):
+            return "לא", "רגיל", day_reason, None
         return "לא", "לא", day_reason, day_reason
 
     tomorrow = for_date + timedelta(days=1)
