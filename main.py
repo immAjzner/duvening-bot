@@ -704,7 +704,7 @@ def day_is_shabbat_or_yomtov(gd):
 
 
 def need_multi_day_digest(today):
-    if datetime.now(TZ).weekday() == 4:
+    if today.weekday() == 4:
         return True
     return day_is_shabbat_or_yomtov(today + timedelta(days=1))
 
@@ -715,8 +715,9 @@ def multi_day_digest_dates(today):
     out = []
     for k in range(1, EXTRA_DIGEST_MAX_OFFSET + 1):
         d = today + timedelta(days=k)
-        if day_is_shabbat_or_yomtov(d):
-            out.append(d)
+        if not day_is_shabbat_or_yomtov(d):
+            break
+        out.append(d)
     return out
 
 
@@ -2139,6 +2140,7 @@ def build_message(for_date=None):
 
         if (
             is_aseret_yemei_teshuva(m, d)
+            and not is_shabbat
             and not is_rosh_hashana(m, d)
             and not is_erev_yom_kippur(m, d)
             and not is_yom_kippur(m, d)
