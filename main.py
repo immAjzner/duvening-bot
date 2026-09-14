@@ -238,6 +238,20 @@ def should_send_now():
 
 # ===== TELEGRAM =====
 def send(chat_id, msg):
+    if "⏰ תזכורת:" in msg:
+        rich_html = f"<p>{msg.replace(chr(10), '<br>')}</p>"
+        requests.post(
+            f"{BASE_URL}/sendRichMessage",
+            json={
+                "chat_id": chat_id,
+                "rich_message": {
+                    "html": rich_html,
+                    "is_rtl": True,
+                },
+            },
+        )
+        return
+
     requests.post(f"{BASE_URL}/sendMessage", data={
         "chat_id": chat_id,
         "text": msg,
@@ -1861,10 +1875,10 @@ def replace_no_changes_placeholder(items):
         items.pop(0)
 
 
-def format_ain_tachanun(note=None):
-    if note:
-        return f"אין תחנון ({note})"
-    return "אין תחנון"
+def format_ain_tachanun(note):
+    if not note:
+        raise ValueError("A reason is required when Tachanun is omitted")
+    return f"אין תחנון ({note})"
 
 
 def format_with_reason(phrase, note=None):
@@ -2084,7 +2098,7 @@ def build_message(for_date=None):
         ]
 
     elif is_erev_rosh_hashana(m, d):
-        mincha = [format_ain_tachanun()]
+        mincha = [format_ain_tachanun("ערב ראש השנה")]
 
     elif not is_special_day:
         mincha = (
@@ -2137,7 +2151,7 @@ def build_message(for_date=None):
                 "אין כאלוקינו",
                 "נחם",
                 "עננו ה׳ עננו",
-                "אין תחנון",
+                format_ain_tachanun("תשעה באב"),
                 "אין אבינו מלכנו",
             ]
 
@@ -2291,7 +2305,8 @@ def build_message(for_date=None):
         fast_name, start_time = reminder_text.split(" יתחיל בשעה ", 1)
         msg += (
             f"\n\n⏰ תזכורת:\n{fast_name}\n"
-            f"\u202bיתחיל בשעה \u202a{start_time}\u202c\u202c\u200f"
+            # Keep the Telegram timestamp off the final visible RTL line.
+            f"יתחיל בשעה \u2066{start_time}\u2069\n\u00a0"
         )
 
     return msg
