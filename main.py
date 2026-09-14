@@ -625,10 +625,14 @@ def ashkenaz_selichot_line(for_date=None):
     if m == 7 and d == 9:
         return "סליחות ערב יו״כ"
 
-    weekday_label = SELICHOT_WEEKDAY_LABELS.get(evening_date.weekday())
-    if not weekday_label:
+    if m == 7 and 3 <= d <= 8:
+        weekday_name = HEBREW_WEEKDAY_NAMES[evening_date.weekday()]
+        return f"סליחות יום {weekday_name} דעשי״ת"
+
+    weekday_name = HEBREW_WEEKDAY_NAMES[evening_date.weekday()]
+    if not weekday_name:
         return None
-    return f"סליחות יום {weekday_label}"
+    return f"סליחות יום {weekday_name}"
 
 
 def is_moed_window_vihi_pesach_or_sukkot(m, d):
@@ -1720,6 +1724,8 @@ def special_shabbat_header_names(for_date=None):
 
 def format_section(name, items):
     name = name.strip()
+    if not items:
+        return name
     return f"{name}:\n" + "\n".join(items)
 
 
@@ -2248,7 +2254,9 @@ def build_message(for_date=None):
         msg += f"\n\n{greeting}"
 
     if fast_reminder:
-        msg += f"\n\n{fast_reminder}"
+        reminder_text = fast_reminder.removeprefix("⏰ תזכורת: ")
+        fast_name, start_time = reminder_text.split(" יתחיל בשעה ", 1)
+        msg += f"\n\n⏰ תזכורת:\n\n{fast_name}\nיתחיל בשעה {start_time}"
 
     return msg
 
