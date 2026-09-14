@@ -586,14 +586,15 @@ def is_aseret_yemei_teshuva(m, d):
     return m == 7 and 1 <= d <= 10
 
 
-SELICHOT_WEEKDAY_LABELS = {
-    6: "א׳",
-    0: "ב׳",
-    1: "ג׳",
-    2: "ד׳",
-    3: "ה׳",
-    4: "ו׳",
-}
+SELICHOT_DAY_NAMES = (
+    "ראשון",
+    "שני",
+    "שלישי",
+    "רביעי",
+    "חמישי",
+    "שישי",
+    "שביעי",
+)
 
 
 def ashkenaz_selichot_start_date(rh_year):
@@ -603,6 +604,17 @@ def ashkenaz_selichot_start_date(rh_year):
     if (rh - start).days < 4:
         start -= timedelta(days=7)
     return start
+
+
+def selichot_day_number(start_date, target_date):
+    """Return the Selichot sequence number, with Shabbat excluded from the count."""
+    number = 0
+    current = start_date
+    while current <= target_date:
+        if current.weekday() != 5:
+            number += 1
+        current += timedelta(days=1)
+    return number
 
 
 def ashkenaz_selichot_line(for_date=None):
@@ -626,13 +638,15 @@ def ashkenaz_selichot_line(for_date=None):
         return "סליחות ערב יו״כ"
 
     if m == 7 and 3 <= d <= 8:
-        weekday_name = HEBREW_WEEKDAY_NAMES[evening_date.weekday()]
-        return f"סליחות יום {weekday_name} דעשי״ת"
+        day_name = SELICHOT_DAY_NAMES[d - 3]
+        return f"סליחות יום {day_name} דעשי״ת"
 
-    weekday_name = HEBREW_WEEKDAY_NAMES[evening_date.weekday()]
-    if not weekday_name:
-        return None
-    return f"סליחות יום {weekday_name}"
+    if m == 6:
+        day_number = selichot_day_number(start, evening_date)
+        if 1 <= day_number <= len(SELICHOT_DAY_NAMES):
+            return f"סליחות יום {SELICHOT_DAY_NAMES[day_number - 1]}"
+
+    return None
 
 
 def is_moed_window_vihi_pesach_or_sukkot(m, d):
@@ -1002,11 +1016,6 @@ def calculate_tachanun(for_date=None):
     wd = for_date.weekday()
     day_reason = tachanun_day_omission_reason(for_date)
     if day_reason:
-        # Although Tachanun is omitted at Shacharit, it is said at Mincha on
-        # the day before Rosh Hashanah and the day before Yom Kippur.
-        y, m, d = hebrew_triple(for_date)
-        if is_erev_rosh_hashana(m, d) or is_erev_yom_kippur(m, d):
-            return "לא", "רגיל", day_reason, None
         return "לא", "לא", day_reason, day_reason
 
     tomorrow = for_date + timedelta(days=1)
@@ -1767,6 +1776,8 @@ def mincha_header_line(y, m, d, is_shabbat):
         return "מנחה של ראש השנה 🌇"
     if is_yom_kippur(m, d):
         return "מנחה של יום כיפור 🌇"
+    if is_erev_yom_kippur(m, d):
+        return "מנחה של ערב יום כיפור 🌇"
 
     if is_shabbat or not is_yomtov(m, d):
         return None
@@ -2061,6 +2072,9 @@ def build_message(for_date=None):
             format_with_reason("יעלה ויבוא", yaale_note),
         ]
 
+    elif is_erev_rosh_hashana(m, d):
+        mincha = [format_ain_tachanun()]
+
     elif not is_special_day:
         mincha = (
             [format_ain_tachanun(min_skip_note)]
@@ -2256,7 +2270,7 @@ def build_message(for_date=None):
     if fast_reminder:
         reminder_text = fast_reminder.removeprefix("⏰ תזכורת: ")
         fast_name, start_time = reminder_text.split(" יתחיל בשעה ", 1)
-        msg += f"\n\n⏰ תזכורת:\n\n{fast_name}\nיתחיל בשעה {start_time}"
+        msg += f"\n\n⏰ תזכורת:\n{fast_name}\n\u200fיתחיל בשעה {start_time}"
 
     return msg
 
