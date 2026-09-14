@@ -949,8 +949,9 @@ def tachanun_day_omission_reason(for_date=None):
 def mincha_eve_omission_reason(for_date, y2, m2, d2):
     """Mincha footnote when the next civil day is erev Yom Tov / Lag BaOmer / erev Shabbat, etc."""
     for_date = resolve_gregorian(for_date)
-    # Tachanun is said at Mincha on 13 Iyar, the day before Pesach Sheni.
-    if is_pesach_sheni(m2, d2):
+    # Tachanun is said at Mincha on the day before Pesach Sheni, Erev Rosh Hashanah,
+    # and Erev Yom Kippur, even though the following day's Shacharit omits it.
+    if is_pesach_sheni(m2, d2) or is_erev_rosh_hashana(m2, d2) or is_erev_yom_kippur(m2, d2):
         return None
     if m2 == 2 and d2 == 18:
         return "ערב ל״ג בעומר"
