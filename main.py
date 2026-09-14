@@ -618,6 +618,8 @@ def ashkenaz_selichot_line(for_date=None):
         return None
     if m == 7 and d in (1, 2):
         return None
+    if is_tzom_gedaliah_observed(evening_date):
+        return "סליחות של צום גדליה"
     if m == 6 and d == 29:
         return "סליחות ערב ראש השנה"
     if m == 7 and d == 9:
@@ -1723,6 +1725,11 @@ def format_section(name, items):
 
 def musaf_header_line(y, m, d, rc_state, is_shabbat):
     """Plain-language Musaf label (Rosh Chodesh, Shalosh Regalim, Shabbat, etc.)."""
+    if is_rosh_hashana(m, d):
+        return "מוסף של ראש השנה 🕍"
+    if is_yom_kippur(m, d):
+        return "מוסף של יום כיפור 🕍"
+
     rc = rc_state in RC_FULL_DAYS
     regalim = (
         is_pesach_from_first_day(m, d)
@@ -1750,6 +1757,11 @@ def musaf_header_line(y, m, d, rc_state, is_shabbat):
 
 def mincha_header_line(y, m, d, is_shabbat):
     """Standalone Mincha label on regalim yom tov (like Musaf) — no detail lines."""
+    if is_rosh_hashana(m, d):
+        return "מנחה של ראש השנה 🌇"
+    if is_yom_kippur(m, d):
+        return "מנחה של יום כיפור 🌇"
+
     if is_shabbat or not is_yomtov(m, d):
         return None
     if (
@@ -1771,6 +1783,10 @@ def arvit_header_line(for_date=None):
     for_date = resolve_gregorian(for_date)
     evening = for_date + timedelta(days=1)
     _, m, d = hebrew_triple(evening)
+    if is_rosh_hashana(m, d):
+        return "ערבית של ראש השנה 🌙"
+    if is_yom_kippur(m, d):
+        return "ערבית של יום כיפור 🌙"
     if is_regalim_opening_hebrew_date(m, d):
         return "ערבית שלוש רגלים 🌙"
     return None
@@ -1795,6 +1811,8 @@ def short_kabbalat_shabbat_reason(for_date=None):
 
     tomorrow = for_date + timedelta(days=1)
     y2, m2, d2 = hebrew_triple(tomorrow)
+    if is_rosh_hashana(m2, d2) or is_yom_kippur(m2, d2):
+        return None
     if is_yomtov(m2, d2):
         return mincha_eve_omission_reason(for_date, y2, m2, d2) or "ערב יום טוב"
 
@@ -1923,6 +1941,7 @@ def build_message(for_date=None):
 
     rc_state = get_rosh_chodesh_state(for_date)
     is_shabbat = is_shabbat_date(for_date)
+    is_rh = is_rosh_hashana(m, d)
     is_yt = is_yomtov(m, d)
     is_tisha_bav = is_tisha_bav_observed(for_date)
     mincha_hdr = mincha_header_line(y, m, d, is_shabbat)
@@ -1930,7 +1949,10 @@ def build_message(for_date=None):
 
     is_special_day = is_shabbat or is_yt
 
-    if (
+    if is_rh:
+        # Rosh Hashanah has its own services; do not show Rosh Chodesh or Shabbat additions.
+        shacharit = []
+    elif (
         not is_special_day
         and is_modern_israel_festivals(y, m, d)
     ):
@@ -1964,7 +1986,8 @@ def build_message(for_date=None):
             if not hallel_shacharit_line(for_date):
                 shacharit.append("אין שינויים")
 
-    insert_hallel_shacharit(shacharit, for_date)
+    if not is_rh:
+        insert_hallel_shacharit(shacharit, for_date)
 
     if not is_special_day:
         if not has_lamenatzeach(y, m, d):
@@ -1974,7 +1997,7 @@ def build_message(for_date=None):
                 )
             )
 
-    if is_shabbat:
+    if is_shabbat and not is_rh and not is_yom_kippur(m, d):
         if not say_av_harachamim(for_date):
             shacharit.append(
                 format_with_reason("אין אב הרחמים", av_harachamim_omit_reason(for_date))
@@ -1987,7 +2010,7 @@ def build_message(for_date=None):
     if shacharit_megillah:
         shacharit.append(shacharit_megillah)
 
-    if is_aseret_yemei_teshuva(m, d):
+    if is_aseret_yemei_teshuva(m, d) and not is_rh:
         append_once(shacharit, "שיר המעלות ממעמקים")
         if not is_shabbat:
             append_once(shacharit, "אבינו מלכנו")
@@ -1995,7 +2018,7 @@ def build_message(for_date=None):
     if say_avinu_malkeinu_on_public_fast(for_date) and not is_shabbat:
         append_once(shacharit, "אבינו מלכנו")
 
-    if say_ledavid_hashem(y, m, d):
+    if say_ledavid_hashem(y, m, d) and not is_rh:
         shacharit.append("לדוד ה׳")
 
     if is_tisha_bav:
@@ -2133,7 +2156,7 @@ def build_message(for_date=None):
         or is_hoshana_raba(m, d)
     )
 
-    if rc_state in RC_FULL_DAYS and is_shabbat:
+    if rc_state in RC_FULL_DAYS and is_shabbat and not is_rh:
         musaf_extras.append("אתה יצרת")
 
     u_bayom = chol_sukkot_musaf_u_bayom(m, d)
@@ -2146,7 +2169,7 @@ def build_message(for_date=None):
     if has_musaf and is_chanukah(m, d):
         musaf_extras.append("על הניסים")
 
-    if not shacharit:
+    if not shacharit and not is_rh:
         shacharit = ["אין שינויים"]
 
     z_sof, z_shkiah, z_tzeit = yeshiva_zmanim_lines(for_date)
@@ -2171,7 +2194,10 @@ def build_message(for_date=None):
 
     if is_aseret_yemei_teshuva(m, d):
         msg += "\n\n<b>עשרת ימי תשובה</b>"
-    msg += f"\n\n{format_section('שחרית 🌅', shacharit)}"
+    shacharit_header = "שחרית של ראש השנה 🌅" if is_rh else "שחרית 🌅"
+    if is_yom_kippur(m, d):
+        shacharit_header = "שחרית של יום כיפור 🌅"
+    msg += f"\n\n{format_section(shacharit_header, shacharit)}"
     if z_sof:
         msg += f"\n\n{z_sof}"
 
@@ -2197,6 +2223,9 @@ def build_message(for_date=None):
         mincha_zmanim.append(f"צאת השבת:{nbsp}{havdalah_hhmm}")
     if mincha_zmanim:
         msg += "\n\n" + "\n".join(mincha_zmanim)
+
+    if is_yom_kippur(m, d):
+        msg += "\n\nנעילה של יום כיפור 🔒"
 
     kbs_reason = short_kabbalat_shabbat_reason(for_date)
     if kbs_reason:
