@@ -586,6 +586,17 @@ def is_aseret_yemei_teshuva(m, d):
     return m == 7 and 1 <= d <= 10
 
 
+def avinu_malkeinu_line(for_date=None):
+    """Return Avinu Malkeinu with the applicable reason in parentheses."""
+    for_date = resolve_gregorian(for_date)
+    y, m, d = hebrew_triple(for_date)
+    if is_aseret_yemei_teshuva(m, d):
+        return "אבינו מלכנו (עשי״ת)"
+    if is_public_fast_observed(for_date):
+        return "אבינו מלכנו (תענית ציבור)"
+    return "אבינו מלכנו"
+
+
 SELICHOT_DAY_NAMES = (
     "ראשון",
     "שני",
@@ -2030,10 +2041,10 @@ def build_message(for_date=None):
     if is_aseret_yemei_teshuva(m, d) and not is_rh:
         append_once(shacharit, "שיר המעלות ממעמקים")
         if not is_shabbat:
-            append_once(shacharit, "אבינו מלכנו")
+            append_once(shacharit, avinu_malkeinu_line(for_date))
 
     if say_avinu_malkeinu_on_public_fast(for_date) and not is_shabbat:
-        append_once(shacharit, "אבינו מלכנו")
+        append_once(shacharit, avinu_malkeinu_line(for_date))
 
     if say_ledavid_hashem(y, m, d) and not is_rh:
         shacharit.append("לדוד ה׳")
@@ -2109,7 +2120,15 @@ def build_message(for_date=None):
         if is_public_fast_observed(for_date):
             mincha.append("עננו ה׳ עננו")
             if say_avinu_malkeinu_on_public_fast(for_date):
-                mincha.append("אבינו מלכנו")
+                append_once(mincha, avinu_malkeinu_line(for_date))
+
+        if (
+            is_aseret_yemei_teshuva(m, d)
+            and not is_rosh_hashana(m, d)
+            and not is_erev_yom_kippur(m, d)
+            and not is_yom_kippur(m, d)
+        ):
+            append_once(mincha, avinu_malkeinu_line(for_date))
 
         if is_tisha_bav:
             mincha = [
@@ -2270,7 +2289,10 @@ def build_message(for_date=None):
     if fast_reminder:
         reminder_text = fast_reminder.removeprefix("⏰ תזכורת: ")
         fast_name, start_time = reminder_text.split(" יתחיל בשעה ", 1)
-        msg += f"\n\n⏰ תזכורת:\n{fast_name}\n\u200fיתחיל בשעה {start_time}"
+        msg += (
+            f"\n\n⏰ תזכורת:\n{fast_name}\n"
+            f"\u202bיתחיל בשעה \u202a{start_time}\u202c\u202c\u200f"
+        )
 
     return msg
 
