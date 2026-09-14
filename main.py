@@ -1984,6 +1984,7 @@ def build_message(for_date=None):
     rc_state = get_rosh_chodesh_state(for_date)
     is_shabbat = is_shabbat_date(for_date)
     is_rh = is_rosh_hashana(m, d)
+    is_yk = is_yom_kippur(m, d)
     is_yt = is_yomtov(m, d)
     is_tisha_bav = is_tisha_bav_observed(for_date)
     mincha_hdr = mincha_header_line(y, m, d, is_shabbat)
@@ -1991,8 +1992,8 @@ def build_message(for_date=None):
 
     is_special_day = is_shabbat or is_yt
 
-    if is_rh:
-        # Rosh Hashanah has its own services; do not show Rosh Chodesh or Shabbat additions.
+    if is_rh or is_yk:
+        # The High Holidays use standalone service headers without detail lines.
         shacharit = []
     elif (
         not is_special_day
@@ -2028,7 +2029,7 @@ def build_message(for_date=None):
             if not hallel_shacharit_line(for_date):
                 shacharit.append("אין שינויים")
 
-    if not is_rh:
+    if not is_rh and not is_yk:
         insert_hallel_shacharit(shacharit, for_date)
 
     if not is_special_day:
@@ -2039,7 +2040,7 @@ def build_message(for_date=None):
                 )
             )
 
-    if is_shabbat and not is_rh and not is_yom_kippur(m, d):
+    if is_shabbat and not is_rh and not is_yk:
         if not say_av_harachamim(for_date):
             shacharit.append(
                 format_with_reason("אין אב הרחמים", av_harachamim_omit_reason(for_date))
@@ -2052,7 +2053,7 @@ def build_message(for_date=None):
     if shacharit_megillah:
         shacharit.append(shacharit_megillah)
 
-    if is_aseret_yemei_teshuva(m, d) and not is_rh:
+    if is_aseret_yemei_teshuva(m, d) and not is_rh and not is_yk:
         append_once(shacharit, "שיר המעלות ממעמקים")
         if not is_shabbat:
             append_once(shacharit, avinu_malkeinu_line(for_date))
@@ -2060,7 +2061,7 @@ def build_message(for_date=None):
     if say_avinu_malkeinu_on_public_fast(for_date) and not is_shabbat:
         append_once(shacharit, avinu_malkeinu_line(for_date))
 
-    if say_ledavid_hashem(y, m, d) and not is_rh:
+    if say_ledavid_hashem(y, m, d) and not is_rh and not is_yk:
         shacharit.append("לדוד ה׳")
 
     if is_tisha_bav:
@@ -2222,7 +2223,7 @@ def build_message(for_date=None):
     if has_musaf and is_chanukah(m, d):
         musaf_extras.append("על הניסים")
 
-    if not shacharit and not is_rh:
+    if not shacharit and not is_rh and not is_yk:
         shacharit = ["אין שינויים"]
 
     z_sof, z_shkiah, z_tzeit = yeshiva_zmanim_lines(for_date)
@@ -2248,7 +2249,7 @@ def build_message(for_date=None):
     if is_aseret_yemei_teshuva(m, d):
         msg += "\n\n<b>עשרת ימי תשובה</b>"
     shacharit_header = "שחרית של ראש השנה 🌅" if is_rh else "שחרית 🌅"
-    if is_yom_kippur(m, d):
+    if is_yk:
         shacharit_header = "שחרית של יום כיפור 🌅"
     msg += f"\n\n{format_section(shacharit_header, shacharit)}"
     if z_sof:
@@ -2277,7 +2278,7 @@ def build_message(for_date=None):
     if mincha_zmanim:
         msg += "\n\n" + "\n".join(mincha_zmanim)
 
-    if is_yom_kippur(m, d):
+    if is_yk:
         msg += "\n\nנעילה של יום כיפור 🔒"
 
     kbs_reason = short_kabbalat_shabbat_reason(for_date)
