@@ -426,7 +426,7 @@ def is_pesach_yom_tov(m, d):
 
 
 def is_pesach_from_first_day(m, d):
-    return m == 1 and d >= 15
+    return m == 1 and 15 <= d <= 21
 
 
 def is_pesach_hallel_dilug_range(m, d):
@@ -466,11 +466,11 @@ def is_erev_shavuot(m, d):
 
 
 def is_sukkot_yom_tov(m, d):
-    return m == 7 and d in (15, 16, 22)
+    return m == 7 and d in (15, 22)
 
 
 def is_sukkot_from_first_day(m, d):
-    return m == 7 and d >= 15
+    return m == 7 and 15 <= d <= 22
 
 
 def is_erev_sukkot(m, d):
@@ -580,6 +580,26 @@ def is_previous_evening_fast(for_date=None):
 
 def say_avinu_malkeinu_on_public_fast(for_date=None):
     return is_public_fast_observed(for_date) and not is_tisha_bav_observed(for_date)
+
+
+def avinu_malkeinu_public_fast_mincha_omit_reason(for_date=None):
+    """Why Avinu Malkeinu is omitted at Mincha on an otherwise qualifying public fast."""
+    for_date = resolve_gregorian(for_date)
+    if not say_avinu_malkeinu_on_public_fast(for_date):
+        return None
+    if for_date.weekday() == 4:
+        return "ערב שבת"
+    _, _, d = hebrew_triple(for_date)
+    if is_taanit_esther_observed(for_date) and d == 13:
+        return "ערב פורים"
+    return None
+
+
+def say_avinu_malkeinu_on_public_fast_mincha(for_date=None):
+    return (
+        say_avinu_malkeinu_on_public_fast(for_date)
+        and avinu_malkeinu_public_fast_mincha_omit_reason(for_date) is None
+    )
 
 
 def get_fast_name(for_date=None):
@@ -740,10 +760,10 @@ def say_av_harachamim(for_date=None):
         return True
 
     # ========= Base rule =========
-    # If no tachanun on a weekday — do not say Av Harachamim (except month-wide Nisan/Sivan rules).
+    # If no Tachanun on a weekday, do not say Av Harachamim, except for the Sivan rule below.
 
     sh, _, sh_skip_note, _ = calculate_tachanun(for_date)
-    if sh == "לא" and sh_skip_note not in ("חודש ניסן", "חודש סיון"):
+    if sh == "לא" and sh_skip_note != "חודש סיון":
         return False
 
     # Shabbat Mevarchim
@@ -759,7 +779,7 @@ def say_av_harachamim(for_date=None):
 
     # ========= Special days =========
 
-    if is_chanukah(m, d):
+    if is_chanukah(y, m, d):
         return False
 
     if is_purim_day(y, m, d):
@@ -791,13 +811,13 @@ def av_harachamim_omit_reason(for_date=None):
     for_date = resolve_gregorian(for_date)
     y, m, d = hebrew_triple(for_date)
     sh_tach, _, sh_skip_note, _ = calculate_tachanun(for_date)
-    if sh_tach == "לא" and sh_skip_note not in ("חודש ניסן", "חודש סיון"):
+    if sh_tach == "לא" and sh_skip_note != "חודש סיון":
         return sh_skip_note or "אין תחנון"
     if is_shabbat_mevarchim(for_date) and m not in [2, 3]:
         return "שבת מברכים"
     if is_four_parshiyot(for_date):
         return "ארבע פרשיות"
-    if is_chanukah(m, d):
+    if is_chanukah(y, m, d):
         return "חנוכה"
     if is_purim_day(y, m, d):
         return "פורים"
@@ -872,10 +892,16 @@ def has_lamenatzeach(y, m, d):
     if is_hoshana_raba(m, d):
         return False
 
-    if is_chanukah(m, d):
+    if is_chanukah(y, m, d):
         return False
 
     if is_purim_day(y, m, d):
+        return False
+
+    if is_purim_katan_day(y, m, d):
+        return False
+
+    if is_isru_chag(m, d):
         return False
 
     if is_pesach_hallel_dilug_range(m, d):
@@ -915,10 +941,14 @@ def lamenatzeach_omit_reason(y, m, d):
         return "ערב סוכות"
     if is_hoshana_raba(m, d):
         return "הושענא רבה"
-    if is_chanukah(m, d):
+    if is_chanukah(y, m, d):
         return "חנוכה"
     if is_purim_day(y, m, d):
         return "פורים"
+    if is_purim_katan_day(y, m, d):
+        return "פורים קטן"
+    if is_isru_chag(m, d):
+        return "איסרו חג"
     if is_pesach_hallel_dilug_range(m, d):
         return "חוה״מ פסח"
     if is_sukkot_days_16_to_20(m, d):
@@ -969,7 +999,7 @@ def tachanun_day_omission_reason(for_date=None):
         return "שושן פורים"
     if is_purim_katan_day(y, m, d):
         return "פורים קטן"
-    if is_chanukah(m, d):
+    if is_chanukah(y, m, d):
         return "חנוכה"
     if m == 1:
         return "חודש ניסן"
@@ -1070,6 +1100,12 @@ def say_vihi_noam(for_date=None):
     if is_yomtov(m, d):
         return False
 
+    if m == 1 and 8 <= d <= 14:
+        return False
+
+    if is_tisha_bav_observed(for_date + timedelta(days=1)):
+        return False
+
     for i in range(1, 7):
         future = for_date + timedelta(days=i)
         _, m2, d2 = hebrew_triple(future)
@@ -1151,7 +1187,7 @@ def get_day_name(y, m, d):
     if rc_hdr:
         return rc_hdr
 
-    if is_chanukah(m, d):
+    if is_chanukah(y, m, d):
         return "חנוכה"
 
     if is_rosh_hashana(m, d):
@@ -1159,6 +1195,9 @@ def get_day_name(y, m, d):
 
     if is_yom_kippur(m, d):
         return "יום כיפור"
+
+    if m == 7 and d == 22:
+        return "שמיני עצרת ושמחת תורה"
 
     if is_pesach_seventh_day(m, d):
         return "שביעי של פסח"
@@ -1189,6 +1228,10 @@ def vihi_noam_omit_reason(for_date=None):
     y, m, d = hebrew_triple(for_date)
     if is_yomtov(m, d):
         return get_day_name(y, m, d) or "יו״ט"
+    if m == 1 and 8 <= d <= 14:
+        return "שבת הגדול"
+    if is_tisha_bav_observed(for_date + timedelta(days=1)):
+        return "תשעה באב"
     for i in range(1, 7):
         future = for_date + timedelta(days=i)
         y2, m2, d2 = hebrew_triple(future)
@@ -1199,30 +1242,31 @@ def vihi_noam_omit_reason(for_date=None):
     return "כללים"
 
 
-def is_chanukah(m, d):
-    return (m == 9 and d >= 25) or (m == 10 and d <= 2)
+def is_chanukah(y, m, d):
+    if m not in (9, 10):
+        return False
+    current_day = gregorian_from_hebrew(y, m, d)
+    first_day = gregorian_from_hebrew(y, 9, 25)
+    return 0 <= (current_day - first_day).days <= 7
 
 
 def is_chanukah_date(for_date=None):
     """All eight Chanukah days, including 3 Tevet when Kislev has 29 days."""
     for_date = resolve_gregorian(for_date)
-    y, m, _ = hebrew_triple(for_date)
-    if m not in (9, 10):
-        return False
-    first_day = gregorian_from_hebrew(y, 9, 25)
-    return 0 <= (for_date - first_day).days <= 7
+    y, m, d = hebrew_triple(for_date)
+    return is_chanukah(y, m, d)
 
 
 def needs_al_hanissim(y, m, d):
-    return is_chanukah(m, d) or is_purim_day(y, m, d)
+    return is_chanukah(y, m, d) or is_purim_day(y, m, d)
 
 
 def is_chol_hamoed_pesach(m, d):
-    return m == 1 and 17 <= d <= 20
+    return m == 1 and 16 <= d <= 20
 
 
 def is_chol_hamoed_sukkot(m, d):
-    return m == 7 and 17 <= d <= 20
+    return m == 7 and 16 <= d <= 21
 
 
 def is_chol_hamoed(m, d):
@@ -1320,17 +1364,17 @@ def hallel_shacharit_line(for_date=None):
     for_date = resolve_gregorian(for_date)
     y, m, d = hebrew_triple(for_date)
     rc = get_rosh_chodesh_state(for_date)
-    ch = is_chanukah(m, d)
+    ch = is_chanukah(y, m, d)
 
     if ch and rc in RC_FULL_DAYS and not is_rosh_hashana(m, d):
-        return "הלל בדילוג"
+        return "הלל שלם"
 
     if is_rosh_hashana(m, d):
         return "הלל שלם"
 
-    if is_pesach_yom_tov(m, d):
+    if is_pesach_first_day(m, d):
         return "הלל שלם"
-    if is_pesach_hallel_dilug_range(m, d):
+    if is_pesach_seventh_day(m, d) or is_pesach_hallel_dilug_range(m, d):
         return "הלל בדילוג"
 
     if is_shavuot(m, d):
@@ -1900,6 +1944,8 @@ def yaale_vehavo_chag_reason(y, m, d):
         return "שבועות"
     if is_hoshana_raba(m, d):
         return "הושענא רבה"
+    if m == 7 and d == 22:
+        return "שמיני עצרת"
     if is_sukkot_from_first_day(m, d):
         if is_sukkot_yom_tov(m, d):
             return "סוכות"
@@ -1921,12 +1967,9 @@ def festival_shabbat_megillah_line(for_date=None):
 
     y, m, d = hebrew_triple(for_date)
 
-    # Song of Songs: Shabbat Chol HaMoed; if there is no Shabbat during Chol HaMoed, read on the seventh day of Pesach.
-    if m == 1:
-        if is_shabbat_date(for_date) and 16 <= d <= 20:
-            return "מגילת שיר השירים"
-        if d == 21 and not hebrew_date_range_has_shabbat(y, m, 16, 20):
-            return "מגילת שיר השירים"
+    # Song of Songs is read on the Shabbat that falls anywhere within the seven days of Pesach.
+    if m == 1 and is_shabbat_date(for_date) and 15 <= d <= 21:
+        return "מגילת שיר השירים"
 
     # Ecclesiastes: Shabbat Chol HaMoed; if there is no Shabbat during Chol HaMoed, read on the first day of Sukkot.
     if m == 7:
@@ -2030,6 +2073,9 @@ def build_message(for_date=None):
             if not hallel_shacharit_line(for_date):
                 shacharit.append("אין שינויים")
 
+    if is_erev_yom_kippur(m, d):
+        shacharit.insert(0, format_with_reason("אין מזמור לתודה", "ערב יום כיפור"))
+
     if not is_rh and not is_yk:
         insert_hallel_shacharit(shacharit, for_date)
 
@@ -2057,13 +2103,46 @@ def build_message(for_date=None):
     if is_aseret_yemei_teshuva(m, d) and not is_rh and not is_yk:
         append_once(shacharit, "שיר המעלות ממעמקים")
         if not is_shabbat:
-            append_once(shacharit, avinu_malkeinu_line(for_date))
+            yom_kippur_is_shabbat = is_shabbat_date(for_date + timedelta(days=1))
+            if not is_erev_yom_kippur(m, d) or yom_kippur_is_shabbat:
+                append_once(shacharit, avinu_malkeinu_line(for_date))
+            else:
+                append_once(
+                    shacharit,
+                    format_with_reason("אין אבינו מלכנו", "ערב יום כיפור"),
+                )
 
     if say_avinu_malkeinu_on_public_fast(for_date) and not is_shabbat:
+        if for_date.weekday() == 4:
+            append_once(shacharit, "תחנון")
         append_once(shacharit, avinu_malkeinu_line(for_date))
 
     if say_ledavid_hashem(y, m, d) and not is_rh and not is_yk:
         shacharit.append("לדוד ה׳")
+
+    if is_erev_yom_kippur(m, d):
+        yom_kippur_is_shabbat = is_shabbat_date(for_date + timedelta(days=1))
+        erev_yom_kippur_omissions = [
+            "<b>ללא:</b>",
+            "מזמור לתודה",
+            "תחנון",
+            "למנצח",
+        ]
+        if not yom_kippur_is_shabbat:
+            erev_yom_kippur_omissions.append("אבינו מלכנו")
+
+        omission_line_prefixes = (
+            "אין מזמור לתודה",
+            "אין תחנון",
+            "אין למנצח",
+            "אין אבינו מלכנו",
+        )
+        remaining_shacharit_lines = [
+            line
+            for line in shacharit
+            if not line.startswith(omission_line_prefixes)
+        ]
+        shacharit = remaining_shacharit_lines + erev_yom_kippur_omissions
 
     if is_tisha_bav:
         shacharit = [
@@ -2135,8 +2214,15 @@ def build_message(for_date=None):
 
         if is_public_fast_observed(for_date):
             mincha.append("עננו ה׳ עננו")
-            if say_avinu_malkeinu_on_public_fast(for_date):
+            if say_avinu_malkeinu_on_public_fast_mincha(for_date):
                 append_once(mincha, avinu_malkeinu_line(for_date))
+            else:
+                am_omit_reason = avinu_malkeinu_public_fast_mincha_omit_reason(for_date)
+                if am_omit_reason:
+                    append_once(
+                        mincha,
+                        format_with_reason("אין אבינו מלכנו", am_omit_reason),
+                    )
 
         if (
             is_aseret_yemei_teshuva(m, d)
@@ -2160,7 +2246,7 @@ def build_message(for_date=None):
 
     replace_no_changes_placeholder(mincha)
 
-    arvit = []
+    arvit = arvit_hallel_leil_pesach_lines(for_date)
     if not arvit_hdr:
         # Maariv reflects the next Hebrew date; Omer is counted at night (use evening date).
         if is_shabbat:
@@ -2191,8 +2277,6 @@ def build_message(for_date=None):
         if needs_al_hanissim(y_arvit, m_arvit, d_arvit):
             arvit.append("על הניסים")
 
-        arvit.extend(arvit_hallel_leil_pesach_lines(for_date))
-
         arvit_megillah = arvit_megillah_line(for_date)
         if arvit_megillah:
             arvit.append(arvit_megillah)
@@ -2222,7 +2306,7 @@ def build_message(for_date=None):
     if is_hoshana_raba(m, d):
         musaf_extras.append("הושענא רבה")
 
-    if has_musaf and is_chanukah(m, d):
+    if has_musaf and is_chanukah(y, m, d):
         musaf_extras.append("על הניסים")
 
     if not shacharit and not is_rh and not is_yk:
@@ -2289,6 +2373,8 @@ def build_message(for_date=None):
 
     if arvit_hdr:
         msg += f"\n\n{arvit_hdr}"
+        if arvit:
+            msg += "\n" + "\n".join(arvit)
     else:
         msg += f"\n\n{format_section('ערבית 🌙', arvit)}"
 
