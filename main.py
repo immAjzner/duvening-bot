@@ -135,6 +135,53 @@ RC_FULL_DAYS = frozenset({"day1", "day2"})
 EXTRA_DIGEST_MAX_OFFSET = 4  # today + up to 4 days ahead in one message
 SUKKOT_MUSAF_U_BAYOM_DAYS = ("השני", "השלישי", "הרביעי", "החמישי", "השישי")
 
+# The six entries correspond to 15–20 Tishrei.
+# Python weekday values are Monday=0, Tuesday=1, Thursday=3, Shabbat=5.
+RINAT_YISRAEL_HOSHANOT_BY_FIRST_DAY_WEEKDAY = {
+    0: (
+        "למען אמתך",
+        "אבן שתיה",
+        "אערוך שועי",
+        "אום אני חומה",
+        "אל למושעות",
+        "אום נצורה",
+    ),
+    1: (
+        "למען אמתך",
+        "אבן שתיה",
+        "אערוך שועי",
+        "אל למושעות",
+        "אום נצורה",
+        "אדון המושיע",
+    ),
+    3: (
+        "למען אמתך",
+        "אבן שתיה",
+        "אום נצורה",
+        "אערוך שועי",
+        "אל למושעות",
+        "אדון המושיע",
+    ),
+    5: (
+        "אום נצורה",
+        "למען אמתך",
+        "אערוך שועי",
+        "אבן שתיה",
+        "אל למושעות",
+        "אדון המושיע",
+    ),
+}
+
+HOSHANA_RABBAH_HOSHANOT = (
+    "למען אמתך",
+    "אבן שתיה",
+    "אום אני חומה",
+    "אדון המושיע",
+    "אדם ובהמה",
+    "אדמה מארר",
+    "למען איתן",
+)
+
 GITHUB_AUTH_HEADER = {"Authorization": f"Bearer {GITHUB_TOKEN}"}
 
 
@@ -186,6 +233,7 @@ def get_file(path):
     content = base64.b64decode(data["content"]).decode("utf-8")
     return json.loads(content), data["sha"]
 
+
 def save_file(path, content_obj, sha, message):
     url = f"https://api.github.com/repos/{REPO}/contents/{path}"
 
@@ -200,10 +248,12 @@ def save_file(path, content_obj, sha, message):
 
     requests.put(url, headers=GITHUB_AUTH_HEADER, json=data)
 
+
 # ===== USERS =====
 def get_users():
     data, sha = get_file(USERS_FILE)
     return (data or []), sha
+
 
 def add_user(chat_id):
     users, sha = get_users()
@@ -213,12 +263,15 @@ def add_user(chat_id):
     save_file(USERS_FILE, users, sha, "add user")
     return True
 
+
 # ===== LAST RUN =====
 def get_last_run():
     return get_file(LAST_RUN_FILE)
 
+
 def save_last_run(today_str, sha):
     save_file(LAST_RUN_FILE, {"date": today_str}, sha, "update last run")
+
 
 # ===== SCHEDULING =====
 def should_send_now():
@@ -235,6 +288,7 @@ def should_send_now():
 
     save_last_run(today_str, sha)
     return True
+
 
 # ===== TELEGRAM =====
 def send(chat_id, msg):
@@ -258,18 +312,22 @@ def send(chat_id, msg):
         "parse_mode": "HTML"
     })
 
+
 def broadcast(msg):
     users, _ = get_users()
     for u in users:
         send(u, msg)
 
+
 # ===== FORMAT =====
 def hebrew_number(n):
-    units = ["", "א","ב","ג","ד","ה","ו","ז","ח","ט"]
-    tens = ["", "י","כ","ל","מ","נ","ס","ע","פ","צ"]
+    units = ["", "א", "ב", "ג", "ד", "ה", "ו", "ז", "ח", "ט"]
+    tens = ["", "י", "כ", "ל", "מ", "נ", "ס", "ע", "פ", "צ"]
 
-    if n == 15: return "ט״ו"
-    if n == 16: return "ט״ז"
+    if n == 15:
+        return "ט״ו"
+    if n == 16:
+        return "ט״ז"
 
     if n < 10:
         return units[n] + "׳"
@@ -278,14 +336,15 @@ def hebrew_number(n):
     u = units[n % 10]
     return f"{t}״{u}" if u else f"{t}׳"
 
+
 def hebrew_year(y):
     y %= 1000
     mapping = [
-        (400,"ת"),(300,"ש"),(200,"ר"),(100,"ק"),
-        (90,"צ"),(80,"פ"),(70,"ע"),(60,"ס"),(50,"נ"),
-        (40,"מ"),(30,"ל"),(20,"כ"),(10,"י"),
-        (9,"ט"),(8,"ח"),(7,"ז"),(6,"ו"),(5,"ה"),
-        (4,"ד"),(3,"ג"),(2,"ב"),(1,"א")
+        (400, "ת"), (300, "ש"), (200, "ר"), (100, "ק"),
+        (90, "צ"), (80, "פ"), (70, "ע"), (60, "ס"), (50, "נ"),
+        (40, "מ"), (30, "ל"), (20, "כ"), (10, "י"),
+        (9, "ט"), (8, "ח"), (7, "ז"), (6, "ו"), (5, "ה"),
+        (4, "ד"), (3, "ג"), (2, "ב"), (1, "א")
     ]
     result = ""
     for v, l in mapping:
@@ -293,6 +352,7 @@ def hebrew_year(y):
             result += l
             y -= v
     return result[:-1] + "״" + result[-1]
+
 
 # ===== DATE =====
 def get_hebrew_date(for_date=None):
@@ -304,15 +364,20 @@ def get_hebrew_date(for_date=None):
         f"ב{HEBREW_MONTH_NAMES[m]} ה{hebrew_year(y)}"
     )
 
+
 # ===== OMER =====
 def calculate_omer(for_date=None):
     _, m, d = hebrew_triple(for_date)
 
-    if m == 1 and d >= 16: return d - 15
-    if m == 2: return 15 + d
-    if m == 3 and d <= 5: return 44 + d
+    if m == 1 and d >= 16:
+        return d - 15
+    if m == 2:
+        return 15 + d
+    if m == 3 and d <= 5:
+        return 44 + d
 
     return None
+
 
 def say_tzidkatcha(for_date=None):
     for_date = resolve_gregorian(for_date)
@@ -395,6 +460,7 @@ def shabbat_mevarchim_line(for_date=None):
         days_text = "בימים " + "-".join(weekdays)
 
     return f"ר״ח {month_name} יהיה {days_text}"
+
 
 # ===== HOLIDAYS =====
 def is_rosh_hashana(m, d):
@@ -489,13 +555,47 @@ def gregorian_from_hebrew(y, m, d):
     return date(*hebrew.to_gregorian(y, m, d))
 
 
+def rinat_yisrael_hoshanot_names(for_date=None):
+    """Return the Hoshanot names for Chol HaMoed Sukkot.
+
+    Days 16–20 Tishrei follow the Rinat Yisrael Ashkenaz weekday table.
+    Day 21 Tishrei returns the seven Hoshanot of Hoshana Rabbah.
+    """
+    for_date = resolve_gregorian(for_date)
+    y, m, d = hebrew_triple(for_date)
+
+    if m != 7 or not 16 <= d <= 21:
+        return ()
+
+    if d == 21:
+        return HOSHANA_RABBAH_HOSHANOT
+
+    sukkot_first_day = gregorian_from_hebrew(y, 7, 15)
+    order = RINAT_YISRAEL_HOSHANOT_BY_FIRST_DAY_WEEKDAY.get(
+        sukkot_first_day.weekday()
+    )
+    if order is None:
+        return ()
+
+    return (order[d - 15],)
+
+
+def rinat_yisrael_hoshanot_line(for_date=None):
+    names = rinat_yisrael_hoshanot_names(for_date)
+    if not names:
+        return None
+
+    names_text = " · ".join(html.escape(name) for name in names)
+    return f"הושענות <b>{names_text}</b>"
+
+
 def is_yom_haatzmaut(y, m, d):
     actual = gregorian_from_hebrew(y, 2, 5)
-    if actual.weekday() == 4:  # 5 Iyar on Friday -> observed Thursday
+    if actual.weekday() == 4:
         observed = actual - timedelta(days=1)
-    elif actual.weekday() == 5:  # 5 Iyar on Shabbat -> observed Thursday
+    elif actual.weekday() == 5:
         observed = actual - timedelta(days=2)
-    elif actual.weekday() == 0:  # 5 Iyar on Monday -> deferred to Tuesday
+    elif actual.weekday() == 0:
         observed = actual + timedelta(days=1)
     else:
         observed = actual
@@ -707,11 +807,14 @@ def is_yomtov(m, d):
         or is_sukkot_yom_tov(m, d)
     )
 
+
 def is_shabbat():
     return datetime.now(TZ).weekday() == 5
 
+
 def is_shabbat_date(for_date):
     return for_date.weekday() == 5
+
 
 def is_yomtov_today():
     _, m, d = hebrew_triple(today_jerusalem())
@@ -769,7 +872,7 @@ def say_av_harachamim(for_date=None):
     # Shabbat Mevarchim
     if is_shabbat_mevarchim(for_date):
         # Exceptions — still say
-        if m in [2, 3]:  # Iyar, Sivan
+        if m in [2, 3]:
             return True
         return False
 
@@ -785,18 +888,16 @@ def say_av_harachamim(for_date=None):
     if is_purim_day(y, m, d):
         return False
 
-    # Tu BiShvat
     if m == 11 and d == 15:
         return False
 
-    # Lag BaOmer
     if m == 2 and d == 18:
         return False
 
     if is_isru_chag(m, d):
         return False
 
-    # Erev chag (Pesach/Shavuos/R"H)
+    # Erev chag
     tomorrow = for_date + timedelta(days=1)
     _, tomorrow_m, tomorrow_d = hebrew_triple(tomorrow)
     if is_yomtov(tomorrow_m, tomorrow_d):
@@ -858,7 +959,6 @@ def four_parshiyot_name(for_date=None):
     rc_nisan = dates.HebrewDate(hy, 1, 1)
 
     shekalim = shabbat_on_or_before(rc_adar)
-    # Zachor: Shabbat preceding Purim (or Purim itself if it falls on Shabbat)
     zachor = purim if purim.weekday() == 7 else purim - purim.weekday()
     hachodesh = shabbat_on_or_before(rc_nisan)
     parah = hachodesh - 7
@@ -874,6 +974,7 @@ def four_parshiyot_name(for_date=None):
 
 def is_four_parshiyot(for_date=None):
     return four_parshiyot_name(for_date) is not None
+
 
 # ===== Lamenatzeach (intro psalm) =====
 def has_lamenatzeach(y, m, d):
@@ -977,6 +1078,7 @@ def say_ledavid_hashem_arvit(for_date=None):
     _, m, d = hebrew_triple(evening_date)
     return m == 6 or (m == 7 and d <= 20)
 
+
 # ===== TACHANUN =====
 def tachanun_day_omission_reason(for_date=None):
     """Reason Tachanun is omitted for the full civil day's prayers."""
@@ -1025,8 +1127,7 @@ def tachanun_day_omission_reason(for_date=None):
 def mincha_eve_omission_reason(for_date, y2, m2, d2):
     """Mincha footnote when the next civil day is erev Yom Tov / Lag BaOmer / erev Shabbat, etc."""
     for_date = resolve_gregorian(for_date)
-    # Tachanun is said at Mincha on the day before Pesach Sheni, Erev Rosh Hashanah,
-    # and Erev Yom Kippur, even though the following day's Shacharit omits it.
+
     if is_pesach_sheni(m2, d2) or is_erev_rosh_hashana(m2, d2) or is_erev_yom_kippur(m2, d2):
         return None
     if m2 == 2 and d2 == 18:
@@ -1063,9 +1164,9 @@ def mincha_eve_omission_reason(for_date, y2, m2, d2):
 
 
 def calculate_tachanun(for_date=None):
-    """Returns (shacharit, mincha, shacharit 'no tachanun' reason, mincha reason) — for bot parentheses only.
+    """Returns (shacharit, mincha, shacharit 'no tachanun' reason, mincha reason).
 
-    When tachanun is omitted only at mincha (erev), shacharit reason is None.
+    When tachanun is omitted only at mincha, the shacharit reason is None.
     """
     for_date = resolve_gregorian(for_date)
 
@@ -1090,6 +1191,7 @@ def calculate_tachanun(for_date=None):
         return "ארוך", "רגיל", None, None
 
     return "רגיל", "רגיל", None, None
+
 
 def say_vihi_noam(for_date=None):
     for_date = resolve_gregorian(for_date)
@@ -1120,7 +1222,7 @@ def say_vihi_noam(for_date=None):
 
 
 def rosh_chodesh_header_name(y, m, d):
-    """Rosh Chodesh day title, e.g. 'Rosh Chodesh Cheshvan' — not on Rosh Hashanah (stays 'Rosh Hashanah')."""
+    """Rosh Chodesh day title, excluding Rosh Hashanah."""
     if is_rosh_hashana(m, d):
         return None
     if d == 1:
@@ -1137,7 +1239,6 @@ def rosh_chodesh_header_name(y, m, d):
 
 
 def rosh_chodesh_yaale_month_suffix(y, m, d, for_date=None):
-    """e.g. 'R"Ch Sivan' for the Yaaleh VeYavo line at mincha/arvit on Rosh Chodesh."""
     for_date = resolve_gregorian(for_date)
     if d == 1:
         return f"ר״ח {hebrew_month_name(y, m)}"
@@ -1150,7 +1251,6 @@ def rosh_chodesh_yaale_month_suffix(y, m, d, for_date=None):
 
 
 def yaale_erev_rc_suffix(for_date=None):
-    """Evening after Rosh Chodesh (day 2 or 30) for arvit — e.g. 'R"Ch Sivan', not 'erev R"Ch'."""
     for_date = resolve_gregorian(for_date)
     t = for_date + timedelta(days=1)
     y2, m2, d2 = hebrew_triple(t)
@@ -1221,7 +1321,6 @@ def get_day_name(y, m, d):
 
 
 def vihi_noam_omit_reason(for_date=None):
-    """Shown only when Vihi Noam is omitted on Motzaei Shabbat — only in the Shabbat-day digest (Motzaei Shabbat arvit)."""
     for_date = resolve_gregorian(for_date)
     if not is_shabbat_date(for_date):
         return None
@@ -1251,7 +1350,6 @@ def is_chanukah(y, m, d):
 
 
 def is_chanukah_date(for_date=None):
-    """All eight Chanukah days, including 3 Tevet when Kislev has 29 days."""
     for_date = resolve_gregorian(for_date)
     y, m, d = hebrew_triple(for_date)
     return is_chanukah(y, m, d)
@@ -1279,14 +1377,16 @@ def chol_sukkot_musaf_u_bayom(m, d):
     day = SUKKOT_MUSAF_U_BAYOM_DAYS[d - 16]
     return f"וביום {day}"
 
+
 def is_hoshana_raba(m, d):
     return m == 7 and d == 21
+
 
 def is_intermediate_moed_window_vihi(m, d):
     return is_moed_window_vihi_pesach_or_sukkot(m, d)
 
+
 def day_has_chag_greeting(y, m, d, for_date=None):
-    """True when a weekday digest would end with 'חג שמח!' (yom tov or named chag day)."""
     for_date = resolve_gregorian(for_date)
     if is_yomtov(m, d):
         return True
@@ -1310,7 +1410,7 @@ def get_greeting(y, m, d, for_date=None):
     else:
         greeting = ""
 
-    if wd == 5:  # Shabbat only
+    if wd == 5:
         yesterday = for_date - timedelta(days=1)
         y0, m0, d0 = hebrew_triple(yesterday)
         if day_has_chag_greeting(y0, m0, d0, yesterday):
@@ -1318,6 +1418,7 @@ def get_greeting(y, m, d, for_date=None):
         return f"שבת שלום ו{greeting}" if greeting else "שבת שלום!"
 
     return greeting
+
 
 def get_rosh_chodesh_state(for_date=None):
     today = resolve_gregorian(for_date)
@@ -1341,6 +1442,7 @@ def get_rosh_chodesh_state(for_date=None):
         return "day1"
 
     return None
+
 
 def needs_yaale_veyavo(for_date=None):
     _, m, d = hebrew_triple(for_date)
@@ -1462,7 +1564,6 @@ def _shift_hhmm(hhmm, minutes_delta):
 
 
 def _yeshiva_hebrew_month(hy, hm):
-    # convertdate uses Nisan=1..Adar(II)=12/13; yeshiva.org.il uses Tishrei=1..Elul=12/13.
     if hm >= 7:
         return hm - 6
     return hm + (7 if hebrew.leap(hy) else 6)
@@ -1561,8 +1662,6 @@ def yeshiva_day_payload(for_date=None):
     pl = YESHIVA_PLACE_ID
     hy, hm, hd = hebrew.from_gregorian(for_date.year, for_date.month, for_date.day)
     yorg_month = _yeshiva_hebrew_month(hy, hm)
-    # timesDayPrint exposes a full set of daily zmanim for the requested place;
-    # the older calaj.aspx?op=d only returns Shabbat times for many dates.
     url = (
         "https://www.yeshiva.org.il/calendar/timesDayPrint.aspx"
         f"?hy={hy}&hm={yorg_month}&hd={hd}&place={pl}"
@@ -1610,12 +1709,6 @@ def _yeshiva_time_by_names_anywhere(payload, accepted_names):
 
 
 def yeshiva_fast_zmanim_hhmm(for_date=None):
-    """Return explicit Yeshiva (start, end) times; never calculate missing values.
-
-    Yeshiva attaches Tisha B'Av and Yom Kippur entrance/exit rows to the
-    preceding civil day's page. Yom Kippur uses its holiday entrance/exit
-    labels on the site.
-    """
     fast_date = resolve_gregorian(for_date)
     source_date = (
         fast_date - timedelta(days=1)
@@ -1651,7 +1744,6 @@ def yeshiva_fast_zmanim_lines(for_date=None):
 
 
 def fast_zmanim_lines_for_message(for_date=None):
-    """Return (morning start, evening start, end) for one civil-day message."""
     for_date = resolve_gregorian(for_date)
     morning_start = ""
     evening_start = ""
@@ -1689,8 +1781,6 @@ def minor_fast_reminder_line(for_date=None):
 
 def yeshiva_zmanim_lines(for_date=None):
     p = yeshiva_day_payload(for_date)
-    # NBSP (\u00A0) between the colon and time — keeps Telegram from stretching the space
-    # when a line in the paragraph has longer text (e.g. Omer count).
     nbsp = "\u00a0"
 
     def line(label, names):
@@ -1737,7 +1827,6 @@ def get_shabbat_parsha_line(for_date):
 
 
 def special_shabbat_header_names(for_date=None):
-    """Named Shabbatot shown in the message header, including overlapping names."""
     for_date = resolve_gregorian(for_date)
     if not is_shabbat_date(for_date):
         return []
@@ -1774,7 +1863,6 @@ def special_shabbat_header_names(for_date=None):
     if 1 <= days_after_tisha_bav <= 7:
         names.append("שבת נחמו")
 
-    # Israel calendar: Chol HaMoed begins on 16 Nisan / 16 Tishrei.
     if m == 1 and 16 <= d <= 20:
         names.append("שבת חוה״מ פסח")
     elif m == 7 and 16 <= d <= 20:
@@ -1809,7 +1897,6 @@ def format_section(name, items):
 
 
 def musaf_header_line(y, m, d, rc_state, is_shabbat):
-    """Plain-language Musaf label (Rosh Chodesh, Shalosh Regalim, Shabbat, etc.)."""
     if is_rosh_hashana(m, d):
         return "מוסף של ראש השנה 🕍"
     if is_yom_kippur(m, d):
@@ -1841,7 +1928,6 @@ def musaf_header_line(y, m, d, rc_state, is_shabbat):
 
 
 def mincha_header_line(y, m, d, is_shabbat):
-    """Standalone Mincha label on regalim yom tov (like Musaf) — no detail lines."""
     if is_rosh_hashana(m, d):
         return "מנחה של ראש השנה 🌇"
     if is_yom_kippur(m, d):
@@ -1861,12 +1947,10 @@ def mincha_header_line(y, m, d, is_shabbat):
 
 
 def is_regalim_opening_hebrew_date(m, d):
-    """First day of Pesach, Shavuot, or Sukkot — opening maariv of that regel."""
     return is_pesach_first_day(m, d) or is_shavuot(m, d) or (m == 7 and d == 15)
 
 
 def arvit_header_line(for_date=None):
-    """Standalone Arvit label at the opening maariv of each regel (first night only)."""
     for_date = resolve_gregorian(for_date)
     evening = for_date + timedelta(days=1)
     _, m, d = hebrew_triple(evening)
@@ -1880,10 +1964,6 @@ def arvit_header_line(for_date=None):
 
 
 def short_kabbalat_shabbat_reason(for_date=None):
-    """Parenthetical reason for abbreviated Kabbalat Shabbat (Friday between Mincha and Maariv).
-
-    Only on Friday when today is yom tov or chol hamoed, or tomorrow is yom tov.
-    """
     for_date = resolve_gregorian(for_date)
     if for_date.weekday() != 4:
         return None
@@ -1933,7 +2013,6 @@ def format_with_reason(phrase, note=None):
 
 
 def yaale_vehavo_chag_reason(y, m, d):
-    """Short text for parentheses when Yaaleh VeYavo is for chag/moed (not Rosh Chodesh)."""
     if is_pesach_from_first_day(m, d):
         if is_pesach_yom_tov(m, d):
             return "פסח"
@@ -1967,11 +2046,9 @@ def festival_shabbat_megillah_line(for_date=None):
 
     y, m, d = hebrew_triple(for_date)
 
-    # Song of Songs is read on the Shabbat that falls anywhere within the seven days of Pesach.
     if m == 1 and is_shabbat_date(for_date) and 15 <= d <= 21:
         return "מגילת שיר השירים"
 
-    # Ecclesiastes: Shabbat Chol HaMoed; if there is no Shabbat during Chol HaMoed, read on the first day of Sukkot.
     if m == 7:
         if is_shabbat_date(for_date) and 16 <= d <= 20:
             return "מגילת קהלת"
@@ -2037,7 +2114,6 @@ def build_message(for_date=None):
     is_special_day = is_shabbat or is_yt
 
     if is_rh or is_yk:
-        # The High Holidays use standalone service headers without detail lines.
         shacharit = []
     elif (
         not is_special_day
@@ -2055,7 +2131,6 @@ def build_message(for_date=None):
         shacharit.append("ברכי נפשי")
 
     elif needs_yaale_veyavo(for_date):
-        # Yom tov: no "no tachanun" line — tachanun is never said on yom tov anyway.
         if not is_yt:
             shacharit.append(
                 format_ain_tachanun(yaale_vehavo_chag_reason(y, m, d))
@@ -2078,6 +2153,10 @@ def build_message(for_date=None):
 
     if not is_rh and not is_yk:
         insert_hallel_shacharit(shacharit, for_date)
+
+    hoshanot_line = rinat_yisrael_hoshanot_line(for_date)
+    if hoshanot_line:
+        shacharit.append(hoshanot_line)
 
     if not is_special_day:
         if not has_lamenatzeach(y, m, d):
@@ -2248,7 +2327,6 @@ def build_message(for_date=None):
 
     arvit = arvit_hallel_leil_pesach_lines(for_date)
     if not arvit_hdr:
-        # Maariv reflects the next Hebrew date; Omer is counted at night (use evening date).
         if is_shabbat:
             if not say_vihi_noam(for_date):
                 arvit.append(
@@ -2334,10 +2412,12 @@ def build_message(for_date=None):
 
     if is_aseret_yemei_teshuva(m, d):
         msg += "\n\n<b>עשרת ימי תשובה</b>"
+
     shacharit_header = "שחרית של ראש השנה 🌅" if is_rh else "שחרית 🌅"
     if is_yk:
         shacharit_header = "שחרית של יום כיפור 🌅"
     msg += f"\n\n{format_section(shacharit_header, shacharit)}"
+
     if z_sof:
         msg += f"\n\n{z_sof}"
 
@@ -2350,6 +2430,7 @@ def build_message(for_date=None):
         msg += f"\n\n{mincha_hdr}"
     else:
         msg += f"\n\n{format_section('מנחה 🌇', mincha)}"
+
     mincha_zmanim = []
     if fast_start_evening:
         mincha_zmanim.append(fast_start_evening)
@@ -2394,11 +2475,11 @@ def build_message(for_date=None):
         fast_name, start_time = reminder_text.split(" יתחיל בשעה ", 1)
         msg += (
             f"\n\n⏰ תזכורת:\n{fast_name}\n"
-            # Keep the Telegram timestamp off the final visible RTL line.
             f"יתחיל בשעה \u2066{start_time}\u2069\n\u00a0"
         )
 
     return msg
+
 
 # ===== UPDATES =====
 def poll_updates():
@@ -2413,6 +2494,7 @@ def poll_updates():
 
         if text == "/start" and add_user(chat_id):
             send(chat_id, "נרשמת בהצלחה 🙌")
+
 
 def build_daily_digest(today=None):
     today = resolve_gregorian(today)
@@ -2456,7 +2538,6 @@ def main():
         return
 
     manual = is_manual_dispatch_run()
-    # Scheduled run: morning window + do not send twice same day (last_run).
 
     if not manual and not should_send_now():
         return
@@ -2464,13 +2545,13 @@ def main():
     if is_shabbat() or is_yomtov_today():
         return
 
-    # Manual workflow_dispatch with FORCE_SEND=0: broadcast to all without editing last_run.json by hand.
     if manual:
         today_str = today_jerusalem().isoformat()
         _, sha = get_last_run()
         save_last_run(today_str, sha)
 
     broadcast(build_daily_digest())
+
 
 if __name__ == "__main__":
     main()
