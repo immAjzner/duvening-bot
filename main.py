@@ -34,33 +34,32 @@ def today_jerusalem():
     """Gregorian date in Asia/Jerusalem.
 
     GitHub Actions and other hosts run in UTC; `date.today()` is the machine's
-    calendar day. Early morning in Israel (e.g. 0:00–02:59) is still "yesterday"
-    in UTC, which made the digest one civil day behind `should_send_now()` (which
-    already uses `datetime.now(TZ).date()`).
+    calendar day. Early morning in Israel may still be the previous day in UTC.
     """
     return datetime.now(TZ).date()
 
 
 def parse_force_send_count():
-    """How many preview messages to send only to MY_CHAT_ID. 0 = off (normal run).
-
-    Supports FORCE_SEND=1 as before (one message for the current day).
-    """
+    """How many preview messages to send only to MY_CHAT_ID. 0 = off."""
     raw = (os.environ.get("FORCE_SEND") or "").strip()
     if not raw:
         return 0
+
     try:
-        n = int(raw, 10)
+        value = int(raw, 10)
     except ValueError:
         return 0
-    return n if n > 0 else 0
+
+    return value if value > 0 else 0
 
 
 def parse_preview_date():
     """Optional ISO date for a manual preview sent only to MY_CHAT_ID."""
     raw = (os.environ.get("PREVIEW_DATE") or "").strip()
+
     if not raw:
         return False, None
+
     try:
         return True, date.fromisoformat(raw)
     except ValueError:
@@ -68,12 +67,9 @@ def parse_preview_date():
 
 
 def is_manual_dispatch_run():
-    """True when GitHub Actions workflow_dispatch sets MANUAL_RUN=1.
-
-    Scheduled runs do not set it; they retain the normal morning-window and
-    last-run behavior.
-    """
+    """Return whether this is a manually dispatched GitHub Actions run."""
     value = (os.environ.get("MANUAL_RUN") or "").strip().lower()
+
     if value in ("1", "true", "yes"):
         return True
 
@@ -82,11 +78,8 @@ def is_manual_dispatch_run():
     ).strip() == "workflow_dispatch"
 
 
-# Day zmanim and Shabbat times from yeshiva.org — place id 173 is Netanya.
 YESHIVA_PLACE_ID = os.environ.get("YESHIVA_PLACE_ID", "173")
 
-# Browser-like headers are required because the site may otherwise return
-# an HTML error response instead of the expected content.
 YESHIVA_HTTP_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -98,7 +91,6 @@ YESHIVA_HTTP_HEADERS = {
     "Referer": "https://www.yeshiva.org.il/calendar/timesday",
 }
 
-# Labels as they appear in JSON and HTML, including alternate abbreviations.
 YI_NAMES_SOF_ZMAN_SHMA_GRA = (
     'סוף זמן קריאת שמע לגר"א',
     'סוף זמן ק"ש לגר"א',
@@ -144,6 +136,7 @@ HEBREW_WEEKDAY_NAMES = (
 
 RC_FULL_DAYS = frozenset({"day1", "day2"})
 EXTRA_DIGEST_MAX_OFFSET = 4
+
 SUKKOT_MUSAF_U_BAYOM_DAYS = (
     "השני",
     "השלישי",
@@ -200,6 +193,7 @@ def resolve_gregorian(for_date=None):
 
 def hebrew_triple(for_date=None):
     gregorian_date = resolve_gregorian(for_date)
+
     return hebrew.from_gregorian(
         gregorian_date.year,
         gregorian_date.month,
@@ -209,6 +203,7 @@ def hebrew_triple(for_date=None):
 
 def is_hebrew_leap_year(year):
     leap_fn = getattr(hebrew, "leap", None)
+
     if leap_fn is not None:
         return bool(leap_fn(year))
 
@@ -246,13 +241,19 @@ def is_purim_katan_day(year, month, day):
 # ===== GITHUB =====
 def get_file(path):
     url = f"https://api.github.com/repos/{REPO}/contents/{path}"
-    response = requests.get(url, headers=GITHUB_AUTH_HEADER, timeout=20)
+
+    response = requests.get(
+        url,
+        headers=GITHUB_AUTH_HEADER,
+        timeout=20,
+    )
 
     if response.status_code != 200:
         return None, None
 
     data = response.json()
     content = base64.b64decode(data["content"]).decode("utf-8")
+
     return json.loads(content), data["sha"]
 
 
@@ -264,7 +265,9 @@ def save_file(path, content_obj, sha, message):
         ensure_ascii=False,
         indent=2,
     )
-    encoded = base64.b64encode(content.encode("utf-8")).decode("ascii")
+    encoded = base64.b64encode(
+        content.encode("utf-8")
+    ).decode("ascii")
 
     payload = {
         "message": message,
@@ -297,6 +300,7 @@ def add_user(chat_id):
 
     users.append(chat_id)
     save_file(USERS_FILE, users, sha, "add user")
+
     return True
 
 
@@ -328,6 +332,7 @@ def should_send_now():
         return False
 
     save_last_run(today_str, sha)
+
     return True
 
 
@@ -335,7 +340,8 @@ def should_send_now():
 def send(chat_id, msg):
     if "⏰ תזכורת:" in msg:
         rich_html = f"<p>{msg.replace(chr(10), '<br>')}</p>"
-        requests.post(
+
+        response = requests.post(
             f"{BASE_URL}/sendRichMessage",
             json={
                 "chat_id": chat_id,
@@ -346,6 +352,7 @@ def send(chat_id, msg):
             },
             timeout=20,
         )
+        response.raise_for_status()
         return
 
     response = requests.post(
@@ -381,6 +388,7 @@ def hebrew_number(number):
         "ח",
         "ט",
     ]
+
     tens = [
         "",
         "י",
@@ -487,6 +495,7 @@ def say_tzidkatcha(for_date=None):
         return True
 
     _, mincha, _, _ = calculate_tachanun(for_date)
+
     return mincha != "לא"
 
 
@@ -496,9 +505,11 @@ def tzidkatcha_omit_reason(for_date=None):
     if not is_shabbat_date(for_date):
         return None
 
-    _, min_tachanun, _, mincha_skip_note = calculate_tachanun(for_date)
+    _, mincha_tachanun, _, mincha_skip_note = calculate_tachanun(
+        for_date
+    )
 
-    if min_tachanun == "לא":
+    if mincha_tachanun == "לא":
         return mincha_skip_note or "אין תחנון"
 
     return None
@@ -573,6 +584,7 @@ def shabbat_mevarchim_line(for_date=None):
     rosh_chodesh_year, rosh_chodesh_month, _ = hebrew_triple(
         month_date
     )
+
     month_name = hebrew_month_name(
         rosh_chodesh_year,
         rosh_chodesh_month,
@@ -687,6 +699,14 @@ def is_sukkot_hallel_through_shemini(month, day):
     return month == 7 and 15 <= day <= 22
 
 
+def is_shalosh_regalim_yom_tov(month, day):
+    return (
+        is_pesach_yom_tov(month, day)
+        or is_shavuot(month, day)
+        or is_sukkot_yom_tov(month, day)
+    )
+
+
 def gregorian_from_hebrew(year, month, day):
     return date(
         *hebrew.to_gregorian(
@@ -731,7 +751,7 @@ def rinat_yisrael_hoshanot_line(for_date=None):
     _, month, day = hebrew_triple(for_date)
 
     if month == 7 and day == 21:
-        return "הושענות <b>של הושענא רבא</b>"
+        return "הושענות <b>של הושענא רבה</b>"
 
     names = rinat_yisrael_hoshanot_names(for_date)
 
@@ -872,6 +892,7 @@ def is_public_fast_observed(for_date=None):
 
 def is_yom_kippur_date(for_date=None):
     _, month, day = hebrew_triple(for_date)
+
     return is_yom_kippur(month, day)
 
 
@@ -1002,6 +1023,7 @@ def selichot_day_number(start_date, target_date):
     while current <= target_date:
         if current.weekday() != 5:
             number += 1
+
         current += timedelta(days=1)
 
     return number
@@ -1014,6 +1036,7 @@ def ashkenaz_selichot_line(for_date=None):
     )
 
     year, month, day = hebrew_triple(evening_date)
+
     rosh_hashana_year = (
         year + 1
         if month <= 6
@@ -1096,6 +1119,7 @@ def is_yomtov_today():
     _, month, day = hebrew_triple(
         today_jerusalem()
     )
+
     return is_yomtov(month, day)
 
 
@@ -1280,11 +1304,13 @@ def four_parshiyot_name(for_date=None):
         adar_month,
         1,
     )
+
     purim = dates.HebrewDate(
         hebrew_year_value,
         adar_month,
         14,
     )
+
     rosh_chodesh_nisan = dates.HebrewDate(
         hebrew_year_value,
         1,
@@ -1304,6 +1330,7 @@ def four_parshiyot_name(for_date=None):
     hachodesh = shabbat_on_or_before(
         rosh_chodesh_nisan
     )
+
     parah = hachodesh - 7
 
     names_by_date = (
@@ -1327,7 +1354,7 @@ def is_four_parshiyot(for_date=None):
     return four_parshiyot_name(for_date) is not None
 
 
-# ===== Lamenatzeach (intro psalm) =====
+# ===== LAMENATZEACH =====
 def has_lamenatzeach(year, month, day):
     if day in (1, 30):
         return False
@@ -1619,7 +1646,7 @@ def mincha_eve_omission_reason(
         tomorrow_month == 7
         and tomorrow_day == 22
     ):
-        return "ערב שמיני עצרת"
+        return "ערב שמחת תורה"
 
     if is_pesach_first_day(
         tomorrow_month,
@@ -1667,14 +1694,21 @@ def calculate_tachanun(for_date=None):
     )
 
     if day_reason:
+        mincha_reason = (
+            "ערב שבת"
+            if weekday == 4
+            else day_reason
+        )
+
         return (
             "לא",
             "לא",
             day_reason,
-            day_reason,
+            mincha_reason,
         )
 
     tomorrow = for_date + timedelta(days=1)
+
     (
         tomorrow_year,
         tomorrow_month,
@@ -1688,11 +1722,17 @@ def calculate_tachanun(for_date=None):
             else "רגיל"
         )
 
+        mincha_reason = (
+            "ערב שבת"
+            if weekday == 4
+            else "ערב ר״ח"
+        )
+
         return (
             shacharit,
             "לא",
             None,
-            "ערב ר״ח",
+            mincha_reason,
         )
 
     eve_reason = mincha_eve_omission_reason(
@@ -1709,11 +1749,25 @@ def calculate_tachanun(for_date=None):
             else "רגיל"
         )
 
+        mincha_reason = (
+            "ערב שבת"
+            if weekday == 4
+            else eve_reason
+        )
+
         return (
             shacharit,
             "לא",
             None,
-            eve_reason,
+            mincha_reason,
+        )
+
+    if weekday == 4:
+        return (
+            "רגיל",
+            "לא",
+            None,
+            "ערב שבת",
         )
 
     if weekday in (0, 3):
@@ -1831,6 +1885,7 @@ def rosh_chodesh_yaale_month_suffix(
 
     if day == 30:
         tomorrow = for_date + timedelta(days=1)
+
         (
             tomorrow_year,
             tomorrow_month,
@@ -1864,6 +1919,7 @@ def yaale_erev_rc_suffix(for_date=None):
 
     if tomorrow_day == 30:
         next_day = tomorrow + timedelta(days=1)
+
         (
             next_year,
             next_month,
@@ -1916,8 +1972,11 @@ def get_day_name(year, month, day):
     if is_yom_kippur(month, day):
         return "יום כיפור"
 
+    if is_hoshana_raba(month, day):
+        return "סוכות והושענא רבה"
+
     if month == 7 and day == 22:
-        return "שמיני עצרת ושמחת תורה"
+        return "שמחת תורה"
 
     if is_pesach_seventh_day(month, day):
         return "שביעי של פסח"
@@ -1964,6 +2023,7 @@ def vihi_noam_omit_reason(for_date=None):
 
     for offset in range(1, 7):
         future = for_date + timedelta(days=offset)
+
         (
             future_year,
             future_month,
@@ -2123,6 +2183,7 @@ def get_greeting(
 
     if weekday == 5:
         yesterday = for_date - timedelta(days=1)
+
         (
             yesterday_year,
             yesterday_month,
@@ -2403,6 +2464,7 @@ def _yeshiva_strip_html_fragment(fragment):
 
 def _norm_zman_title(value):
     value = _yeshiva_strip_html_fragment(value)
+
     value = re.sub(
         r"\s+",
         " ",
@@ -2430,6 +2492,7 @@ def _yeshiva_extract_time_pairs(
         name = _norm_zman_title(
             match.group(2)
         )
+
         value = _norm_zman_title(
             match.group(4)
         )
@@ -2692,6 +2755,7 @@ def yeshiva_fast_zmanim_hhmm(
     )
 
     payload = yeshiva_day_payload(source_date)
+
     is_yom_kippur_fast = is_yom_kippur_date(
         fast_date
     )
@@ -2911,6 +2975,7 @@ def special_shabbat_header_names(
         return []
 
     year, month, day = hebrew_triple(for_date)
+
     parsha_parts = get_shabbat_parsha_parts(
         for_date
     )
@@ -2964,6 +3029,7 @@ def special_shabbat_header_names(
         and 16 <= day <= 20
     ):
         names.append("שבת חוה״מ פסח")
+
     elif (
         month == 7
         and 16 <= day <= 20
@@ -3082,19 +3148,6 @@ def mincha_header_line(
     if is_erev_yom_kippur(month, day):
         return "מנחה של ערב יום כיפור 🌇"
 
-    if (
-        is_shabbat
-        or not is_yomtov(month, day)
-    ):
-        return None
-
-    if (
-        is_pesach_yom_tov(month, day)
-        or is_shavuot(month, day)
-        or is_sukkot_yom_tov(month, day)
-    ):
-        return "מנחה שלוש רגלים 🌇"
-
     return None
 
 
@@ -3111,6 +3164,7 @@ def is_regalim_opening_hebrew_date(
 
 def arvit_header_line(for_date=None):
     for_date = resolve_gregorian(for_date)
+
     evening = for_date + timedelta(days=1)
     _, month, day = hebrew_triple(evening)
 
@@ -3207,6 +3261,7 @@ def replace_no_changes_placeholder(items):
 
     if items[0] == "אין שינויים (והוא רחום)":
         items[0] = "תחנון והוא רחום"
+
     elif items[0] == "אין שינויים":
         items.pop(0)
 
@@ -3251,7 +3306,7 @@ def yaale_vehavo_chag_reason(
         return "הושענא רבה"
 
     if month == 7 and day == 22:
-        return "שמיני עצרת"
+        return "שמחת תורה"
 
     if is_sukkot_from_first_day(
         month,
@@ -3297,6 +3352,7 @@ def festival_shabbat_megillah_line(
     for_date=None,
 ):
     for_date = resolve_gregorian(for_date)
+
     year, month, day = hebrew_triple(
         for_date
     )
@@ -3331,6 +3387,7 @@ def festival_shabbat_megillah_line(
 
 def shacharit_megillah_line(for_date=None):
     for_date = resolve_gregorian(for_date)
+
     year, month, day = hebrew_triple(
         for_date
     )
@@ -3370,6 +3427,7 @@ def build_message(for_date=None):
     for_date = resolve_gregorian(for_date)
 
     header = get_hebrew_date(for_date)
+
     year, month, day = hebrew_triple(
         for_date
     )
@@ -3420,18 +3478,22 @@ def build_message(for_date=None):
     )
 
     is_shabbat = is_shabbat_date(for_date)
+
     is_rosh_hashana_day = is_rosh_hashana(
         month,
         day,
     )
+
     is_yom_kippur_day = is_yom_kippur(
         month,
         day,
     )
+
     is_yom_tov = is_yomtov(
         month,
         day,
     )
+
     is_tisha_bav = is_tisha_bav_observed(
         for_date
     )
@@ -3495,6 +3557,14 @@ def build_message(for_date=None):
         )
         shacharit.append("יעלה ויבוא")
         shacharit.append("ברכי נפשי")
+
+    elif is_shalosh_regalim_yom_tov(
+        month,
+        day,
+    ):
+        shacharit.append(
+            "תפילת עמידה של שלוש רגלים"
+        )
 
     elif needs_yaale_veyavo(for_date):
         if not is_yom_tov:
@@ -3744,6 +3814,25 @@ def build_message(for_date=None):
     if mincha_header:
         mincha = []
 
+        if (
+            for_date.weekday() == 4
+            and not is_yom_tov
+            and mincha_tachanun == "לא"
+        ):
+            mincha.append(
+                format_ain_tachanun(
+                    "ערב שבת"
+                )
+            )
+
+    elif is_shalosh_regalim_yom_tov(
+        month,
+        day,
+    ):
+        mincha = [
+            "תפילת עמידה של שלוש רגלים"
+        ]
+
     elif (
         rosh_chodesh_state in RC_FULL_DAYS
         or needs_yaale_veyavo(for_date)
@@ -3757,16 +3846,22 @@ def build_message(for_date=None):
                     for_date,
                 )
             )
-            no_tachanun_note = yaale_note
+            default_no_tachanun_note = yaale_note
         else:
-            no_tachanun_note = (
+            default_no_tachanun_note = (
                 yaale_vehavo_chag_reason(
                     year,
                     month,
                     day,
                 )
             )
-            yaale_note = no_tachanun_note
+            yaale_note = default_no_tachanun_note
+
+        no_tachanun_note = (
+            "ערב שבת"
+            if for_date.weekday() == 4
+            else default_no_tachanun_note
+        )
 
         mincha = [
             format_ain_tachanun(
@@ -3784,7 +3879,9 @@ def build_message(for_date=None):
     ):
         mincha = [
             format_ain_tachanun(
-                "ערב ראש השנה"
+                "ערב שבת"
+                if for_date.weekday() == 4
+                else "ערב ראש השנה"
             )
         ]
 
@@ -4150,6 +4247,9 @@ def build_message(for_date=None):
 
     if mincha_header:
         msg += f"\n\n{mincha_header}"
+
+        if mincha:
+            msg += "\n" + "\n".join(mincha)
     else:
         msg += (
             "\n\n"
@@ -4273,6 +4373,7 @@ def poll_updates():
         timeout=20,
     )
     response.raise_for_status()
+
     data = response.json()
 
     for update in data.get("result", []):
@@ -4325,6 +4426,7 @@ def main():
     poll_updates()
 
     force_count = parse_force_send_count()
+
     (
         preview_date_provided,
         preview_date,
@@ -4357,6 +4459,7 @@ def main():
                 MY_CHAT_ID,
                 build_daily_digest(cursor),
             )
+
             cursor = advance_after_digest_bundle(
                 cursor
             )
