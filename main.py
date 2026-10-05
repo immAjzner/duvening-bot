@@ -730,19 +730,19 @@ def seasonal_prayer_reminder_lines(for_date=None):
     reminder_starts = (
         (
             gregorian_from_hebrew(year, 7, 22),
-            "משיב הרוח ומוריד הגשם",
+            "<b>משיב הרוח ומוריד הגשם</b>",
         ),
         (
             gregorian_from_hebrew(year, 8, 7),
-            "ותן טל ומטר לברכה",
+            "<b>ותן טל ומטר לברכה</b>",
         ),
         (
             pesach_start,
-            "מוריד הטל",
+            "<b>מוריד הטל</b>",
         ),
         (
             pesach_start,
-            "ותן ברכה",
+            "<b>ותן ברכה</b>",
         ),
     )
 
