@@ -717,6 +717,42 @@ def gregorian_from_hebrew(year, month, day):
     )
 
 
+def seasonal_prayer_reminder_lines(for_date=None):
+    """Seasonal Amidah reminders for the start day and the seven following days."""
+    for_date = resolve_gregorian(for_date)
+    year, _, _ = hebrew_triple(for_date)
+
+    pesach_start = gregorian_from_hebrew(
+        year,
+        1,
+        15,
+    )
+    reminder_starts = (
+        (
+            gregorian_from_hebrew(year, 7, 22),
+            "משיב הרוח ומוריד הגשם",
+        ),
+        (
+            gregorian_from_hebrew(year, 8, 7),
+            "ותן טל ומטר לברכה",
+        ),
+        (
+            pesach_start,
+            "מוריד הטל",
+        ),
+        (
+            pesach_start,
+            "ותן ברכה",
+        ),
+    )
+
+    return [
+        reminder
+        for start_date, reminder in reminder_starts
+        if 0 <= (for_date - start_date).days <= 7
+    ]
+
+
 def rinat_yisrael_hoshanot_names(for_date=None):
     """Return the daily Hoshanah for 15–20 Tishrei.
 
@@ -4181,6 +4217,15 @@ def build_message(for_date=None):
     nbsp = "\u00a0"
 
     msg = f"{header} 📅"
+
+    seasonal_reminders = seasonal_prayer_reminder_lines(
+        for_date
+    )
+
+    if seasonal_reminders:
+        msg += "\n\n" + "\n".join(
+            seasonal_reminders
+        )
 
     if fast_start_morning:
         msg += f"\n\n{fast_start_morning}"
