@@ -1830,9 +1830,6 @@ def say_vihi_noam(for_date=None):
 
     _, month, day = hebrew_triple(for_date)
 
-    if is_yomtov(month, day):
-        return False
-
     if month == 1 and 8 <= day <= 14:
         return False
 
@@ -2041,13 +2038,7 @@ def vihi_noam_omit_reason(for_date=None):
     if not is_shabbat_date(for_date):
         return None
 
-    year, month, day = hebrew_triple(for_date)
-
-    if is_yomtov(month, day):
-        return (
-            get_day_name(year, month, day)
-            or "יו״ט"
-        )
+    _, month, day = hebrew_triple(for_date)
 
     if month == 1 and 8 <= day <= 14:
         return "שבת הגדול"
